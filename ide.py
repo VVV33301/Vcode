@@ -1,12 +1,14 @@
+import sys
+import subprocess
+import threading
+import re
+
 from PyQt5.QtWidgets import *
 from PyQt5.QtCore import *
 from PyQt5.QtGui import *
-import sys
 
-import subprocess
-import threading
-
-import re
+import texts
+import style
 
 from traceback import print_exc
 
@@ -27,8 +29,11 @@ class PythonHighlighter(Highlighter):
     def __init__(self, parent: QTextDocument = None):
         super().__init__(parent)
 
+        self.text = QTextCharFormat()
+        self.text.setForeground(QColor(255, 255, 255))
+
         self.main_syntax = QTextCharFormat()
-        self.main_syntax.setForeground(QColor(255, 0, 0))
+        self.main_syntax.setForeground(QColor(255, 127, 0))
 
         self.digit = QTextCharFormat()
         self.digit.setForeground(QColor(0, 255, 255))
@@ -37,42 +42,32 @@ class PythonHighlighter(Highlighter):
         self.string.setForeground(QColor(0, 255, 0))
 
         self.function = QTextCharFormat()
-        self.function.setForeground(QColor(0, 0, 255))
+        self.function.setForeground(QColor(191, 0, 255))
 
         self._mapping = {
-            r'^\s*class\s+': self.main_syntax,
-            r'^\s*def\s+': self.main_syntax,
-            r'^\s*for\s+': self.main_syntax,
-            r'^\s*while\s+': self.main_syntax,
-            r'^\s*if\s+': self.main_syntax,
-            r'^\s*elif\s+': self.main_syntax,
-            r'^\s*else': self.main_syntax,
-            r'^\s*try': self.main_syntax,
-            r'^\s*except': self.main_syntax,
-            r'^\s*finally': self.main_syntax,
-            r'^\s*with': self.main_syntax,
-            r'^\s*import\s+': self.main_syntax,
-            r'^\s*from\s+|\s+s*import\s+': self.main_syntax,
-            r'\s*lambda': self.main_syntax,
-            r'\s+\s*as\s+|\s+\s*in\s+|\s+\s*is\s+': self.main_syntax,
+            r'[^!]': self.text,
+            
+            r'(\w+)(?=\()': self.function,
 
-            r'"([^"]*)"': self.string,
-            r"'([^']*)'": self.string,
+            r'^(class|def|for|while|if|elif|else|try|except|finally|with|import)\b': self.main_syntax,
+            r'^\s*from\s+|\s+s*import\b': self.main_syntax,
+            r'\b(lambda|as|in|is|not|and|or|True|False|None|async|await)\b': self.main_syntax,
 
-            r'(?<![\'"])\b\d+\.\d+|\b\d+\b(?!["\'])': self.digit,
+            r'\b\d+(\.\d+)?': self.digit,
             r'0b[0-1]+': self.digit,
             r'0o[0-7]+': self.digit,
             r'0x[0-9a-fA-F]+': self.digit,
 
-            r'(\w+)(?=\()': self.function,
+            r'"([^"]*)"': self.string,
+            r"'([^']*)'": self.string,
         }
 
 
 class IdeWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle('IDE')
-        self.resize(500, 500)
+        self.setWindowTitle('Vcode')
+        self.resize(1000, 700)
 
         self.process = subprocess.Popen('python -V')
         self.process.wait()
@@ -84,29 +79,38 @@ class IdeWindow(QMainWindow):
         self.highlight = PythonHighlighter()
         self.highlight.setDocument(self.editor.document())
 
-        self.file_m = QMenu('File', self)
-        self.menuBar().addMenu(self.file_m)
+        self.file_menu = QMenu(self)
+        self.menuBar().addMenu(self.file_menu)
 
-        self.open_btn = QAction('Open', self)
+        self.open_btn = QAction(self)
         self.open_btn.setShortcut(QKeySequence.StandardKey.Open)
         self.open_btn.triggered.connect(self.open_file)
-        self.file_m.addAction(self.open_btn)
+        self.file_menu.addAction(self.open_btn)
 
-        self.start_btn = QAction('Start', self)
+        self.save_as_btn = QAction(self)
+        self.save_as_btn.setShortcut(QKeySequence.StandardKey.SaveAs)
+        self.save_as_btn.triggered.connect(self.save_as)
+        self.file_menu.addAction(self.save_as_btn)
+
+        self.start_btn = QAction(self)
         self.start_btn.setShortcut(QKeySequence.StandardKey.Refresh)
         self.start_btn.triggered.connect(self.start_program)
         self.menuBar().addAction(self.start_btn)
 
-        self.exit_btn = QAction('Exit', self)
+        self.exit_btn = QAction(self)
         self.exit_btn.setShortcut(QKeySequence.StandardKey.Close)
         self.exit_btn.triggered.connect(self.close)
         self.menuBar().addAction(self.exit_btn)
 
         self.settings = QSettings('Vcode', 'Settings')
-        if self.settings.value('Font'):
+        if len(self.settings.allKeys()) == 3:
             self.editor.setFont(self.settings.value('Font'))
+            self.select_language(self.settings.value('Language'))
+            self.select_style(self.settings.value('Style'))
         else:
-            self.settings.setValue('Font', QFont('Arial', 12))
+            self.settings.setValue('Font', QFont('JetBrains Mono', 12))
+            self.select_language('en')
+            self.select_style('Classic')
 
         self.filename = 'tests/m_t.py'
         self.saved_text = ''
@@ -115,6 +119,20 @@ class IdeWindow(QMainWindow):
         with open(self.filename) as f:
             self.editor.setText(f.read())
         self.saved_text = self.editor.toPlainText()
+
+    def select_language(self, language):
+        self.settings.setValue('Language', language)
+
+        self.file_menu.setTitle(texts.file_menu[language])
+        self.open_btn.setText(texts.open_btn[language])
+        self.save_as_btn.setText(texts.save_as_btn[language])
+        self.start_btn.setText(texts.start_btn[language])
+        self.exit_btn.setText(texts.exit_btn[language])
+
+    def select_style(self, style_name):
+        if style_name in style.STYLE.keys():
+            self.settings.setValue('Style', style_name)
+            self.setStyleSheet(style.STYLE[style_name])
 
     def start_program(self):
         if not self.autosave and self.saved_text != self.editor.toPlainText():
@@ -133,7 +151,7 @@ class IdeWindow(QMainWindow):
         print(f'\033[1m\033[93mExit code: {self.process.wait()}\033[0m\n')
 
     def open_file(self):
-        file, _ = QFileDialog.getOpenFileName(caption='Open new file...', filter='Python Files (*.py *.pyw)')
+        file, _ = QFileDialog.getOpenFileName(filter='Python Files (*.py *.pyw)')
         if file:
             self.filename = file
             with open(file) as of:
@@ -144,6 +162,12 @@ class IdeWindow(QMainWindow):
         with open(self.filename, 'w') as sf:
             sf.write(self.editor.toPlainText())
         self.saved_text = self.editor.toPlainText()
+
+    def save_as(self):
+        path, _ = QFileDialog.getOpenFileName(filter='Python Files (*.py *.pyw)')
+        if path:
+            with open(path, 'w') as sf:
+                sf.write(self.editor.toPlainText())
 
     def auto_save(self):
         if self.autosave:
@@ -171,6 +195,50 @@ class IdeWindow(QMainWindow):
                 a0.accept()
             else:
                 a0.accept()
+
+
+'''class SettingsDialog(QDialog):
+    """QDialog with app settings"""
+    def __init__(self, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        self.setModal(True)
+        self.lay: QVBoxLayout = QVBoxLayout()
+
+        self.style_select: QGroupBox = QGroupBox(self)
+        style_select_layout: QVBoxLayout = QVBoxLayout()
+
+        for st in 'style.keys()':
+            st_rb: QRadioButton = QRadioButton(st, self)
+            if st == self.parent().settings.value('style'):
+                st_rb.setChecked(True)
+            st_rb.clicked.connect(self.select_style_b)
+            style_select_layout.addWidget(st_rb)
+
+        self.style_select.setLayout(style_select_layout)
+
+        self.autorun: QCheckBox = QCheckBox(self)
+        self.lay.addWidget(self.autorun)
+
+        self.show_autorun: QCheckBox = QCheckBox(self)
+        self.lay.addWidget(self.show_autorun)
+
+        self.top: QCheckBox = QCheckBox(self)
+        self.lay.addWidget(self.top)
+
+        self.doubleclick: QCheckBox = QCheckBox(self)
+        self.lay.addWidget(self.doubleclick)
+
+        self.language: QComboBox = QComboBox(self)
+        self.language.addItems(['EN', 'RU', 'DE'])
+
+        self.wgt: QWidget = QWidget()
+        self.wgt.setLayout(self.lay)
+
+        self.m_lay: QGridLayout = QGridLayout(self)
+        self.m_lay.addWidget(self.style_select, 0, 0, 1, 1)
+        self.m_lay.addWidget(self.wgt, 0, 1, 2, 1)
+        self.m_lay.addWidget(self.language, 1, 0, 1, 1)
+        self.setLayout(self.m_lay)'''
 
 
 if __name__ == '__main__':
