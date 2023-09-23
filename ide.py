@@ -2,10 +2,11 @@ import sys
 import subprocess
 import threading
 import re
+import json
 
-from PyQt5.QtWidgets import *
-from PyQt5.QtCore import *
-from PyQt5.QtGui import *
+from PyQt6.QtWidgets import *
+from PyQt6.QtCore import *
+from PyQt6.QtGui import *
 
 import texts
 import style
@@ -14,53 +15,31 @@ from traceback import print_exc
 
 
 class Highlighter(QSyntaxHighlighter):
-    def __init__(self, parent: QTextDocument = None):
+    def __init__(self, highlight_path: str, parent: QTextDocument = None):
         super().__init__(parent)
         self._mapping = {}
+        with open(highlight_path) as hlf:
+            for string in hlf.readlines():
+                expression, parameters = string.split(' = ')
+                params = json.loads(parameters)
+                text_char = QTextCharFormat()
+                for parameter in params.keys():
+                    match parameter:
+                        case 'foreground':
+                            text_char.setForeground(QColor(*params['foreground']))
+                        case 'background':
+                            text_char.setBackground(QColor(*params['background']))
+                        case 'weight':
+                            text_char.setFontWeight(int(params['weight']))
+                        case 'italic':
+                            text_char.setFontItalic(bool(params['italic']))
+                self._mapping[rf'{expression}'] = text_char
 
     def highlightBlock(self, text: str) -> None:
-        for pattern, style in self._mapping.items():
+        for pattern, char in self._mapping.items():
             for match in re.finditer(pattern, text):
                 s, e = match.span()
-                self.setFormat(s, e-s, style)
-
-
-class PythonHighlighter(Highlighter):
-    def __init__(self, parent: QTextDocument = None):
-        super().__init__(parent)
-
-        self.text = QTextCharFormat()
-        self.text.setForeground(QColor(255, 255, 255))
-
-        self.main_syntax = QTextCharFormat()
-        self.main_syntax.setForeground(QColor(255, 127, 0))
-
-        self.digit = QTextCharFormat()
-        self.digit.setForeground(QColor(0, 255, 255))
-
-        self.string = QTextCharFormat()
-        self.string.setForeground(QColor(0, 255, 0))
-
-        self.function = QTextCharFormat()
-        self.function.setForeground(QColor(191, 0, 255))
-
-        self._mapping = {
-            r'[^!]': self.text,
-            
-            r'(\w+)(?=\()': self.function,
-
-            r'^(class|def|for|while|if|elif|else|try|except|finally|with|import)\b': self.main_syntax,
-            r'^\s*from\s+|\s+s*import\b': self.main_syntax,
-            r'\b(lambda|as|in|is|not|and|or|True|False|None|async|await)\b': self.main_syntax,
-
-            r'\b\d+(\.\d+)?': self.digit,
-            r'0b[0-1]+': self.digit,
-            r'0o[0-7]+': self.digit,
-            r'0x[0-9a-fA-F]+': self.digit,
-
-            r'"([^"]*)"': self.string,
-            r"'([^']*)'": self.string,
-        }
+                self.setFormat(s, e-s, char)
 
 
 class IdeWindow(QMainWindow):
@@ -76,7 +55,7 @@ class IdeWindow(QMainWindow):
         self.editor.textChanged.connect(self.auto_save)
         self.setCentralWidget(self.editor)
 
-        self.highlight = PythonHighlighter()
+        self.highlight = Highlighter('highlights/python.hl')
         self.highlight.setDocument(self.editor.document())
 
         self.file_menu = QMenu(self)

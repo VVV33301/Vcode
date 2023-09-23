@@ -1,0 +1,8 @@
+[^!?$&№] = {"foreground": [255, 255, 255]}
+(\w+)(?=\() = {"foreground": [136, 136, 198]}
+(#[^\n]*) = {"foreground": [127, 127, 127]}
+^\s*@([\w.]+) = {"foreground": [127, 255, 127]}
+\b(class|def|for|while|if|elif|else|try|except|finally|with|import|from|match|case|lambda|as|in|is|not|and|or|True|False|None|async|await|del|return|raise|yield|pass)\b = {"foreground": [255, 127, 0]}
+\b\d+(\.\d+)? = {"foreground": [0, 255, 255]}
+0b[0-1]+|0o[0-7]+|0x[0-9a-fA-F]+ = {"foreground": [0, 255, 255]}
+"([^"]*)"|'([^']*)' = {"foreground": [0, 255, 0]}

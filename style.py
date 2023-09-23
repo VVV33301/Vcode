@@ -1,5 +1,5 @@
 STYLE = {'Windows': '',
-         'Classic': '''background-color: rgb(80, 80, 90)''',
+         'Classic': '''background-color: rgb(75, 75, 80); color: white''',
          'Dark': '',
          'Blue': '',
          'White': ''}
