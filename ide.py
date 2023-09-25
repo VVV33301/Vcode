@@ -11,9 +11,10 @@ from PyQt6.QtGui import *
 
 import texts
 from style import STYLE
-from highlights.languages_list import languages, start_command
 
-from traceback import print_exc
+PATH: str = sys.argv[0].replace("\\", "/").rsplit("/", maxsplit=1)[0]
+with open('languages.json') as llf:
+    language_list: dict = json.load(llf)
 
 
 def set_autorun(enabled: bool) -> None:
@@ -60,6 +61,56 @@ class Highlighter(QSyntaxHighlighter):
                 self.setFormat(s, e - s, char)
 
 
+class TextEditMenu(QMenu):
+    """Custom QLineEdit with new QMenu"""
+    def __init__(self, parent: QTextEdit, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        self.p: QLineEdit = parent
+
+        self.undo: QAction = QAction(self)
+        self.undo.triggered.connect(self.p.undo)
+        self.undo.setShortcut(QKeySequence.StandardKey.Undo)
+        self.addAction(self.undo)
+
+        self.redo: QAction = QAction(self)
+        self.redo.triggered.connect(self.p.redo)
+        self.redo.setShortcut(QKeySequence.StandardKey.Redo)
+        self.addAction(self.redo)
+
+        self.addSeparator()
+
+        self.cut: QAction = QAction(self)
+        self.cut.triggered.connect(self.p.cut)
+        self.cut.setShortcut(QKeySequence.StandardKey.Cut)
+        self.addAction(self.cut)
+
+        self.copy: QAction = QAction(self)
+        self.copy.triggered.connect(self.p.copy)
+        self.copy.setShortcut(QKeySequence.StandardKey.Copy)
+        self.addAction(self.copy)
+
+        self.paste: QAction = QAction(self)
+        self.paste.triggered.connect(self.p.paste)
+        self.paste.setShortcut(QKeySequence.StandardKey.Paste)
+        self.addAction(self.paste)
+
+        self.select_all: QAction = QAction(self)
+        self.select_all.triggered.connect(self.p.selectAll)
+        self.select_all.setShortcut(QKeySequence.StandardKey.SelectAll)
+        self.addAction(self.select_all)
+
+    def __call__(self, event: QContextMenuEvent) -> None:
+        """Call this class to get contect menu"""
+        lang: str = ide.settings.value('language')
+        self.undo.setText(texts.undo[lang])
+        self.redo.setText(texts.redo[lang])
+        self.cut.setText(texts.cut[lang])
+        self.copy.setText(texts.copy[lang])
+        self.paste.setText(texts.paste[lang])
+        self.select_all.setText(texts.select_all[lang])
+        self.popup(event.globalPos())
+
+
 class EditorTab(QTextEdit):
     def __init__(self, filename: str, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -67,8 +118,9 @@ class EditorTab(QTextEdit):
         with open(filename) as cf:
             self.setText(cf.read())
         self.saved_text: str = self.toPlainText()
-        self.highlighter = None
-        self.language = None
+        self.highlighter: Highlighter | None = None
+        self.start_command: str | None = None
+        self.language: str = ''
 
     def setHighlighter(self, highlighter: Highlighter):
         self.highlighter = highlighter
@@ -91,6 +143,8 @@ class IdeWindow(QMainWindow):
 
         self.settings = QSettings('Vcode', 'Settings')
 
+        self.about_window = AboutDialog(self)
+
         self.settings_window = SettingsDialog(self)
         for st in STYLE.keys():
             st_rb: QRadioButton = QRadioButton(st, self)
@@ -98,15 +152,6 @@ class IdeWindow(QMainWindow):
                 st_rb.setChecked(True)
             st_rb.clicked.connect(lambda: self.select_style(self.sender().text()))
             self.settings_window.style_select_layout.addWidget(st_rb)
-        self.settings_window.language.currentTextChanged.connect(
-            lambda: self.select_language(self.settings_window.language.currentText().lower()))
-
-        self.settings_window.autorun.setChecked(bool(self.settings.value('Autorun')))
-        self.settings_window.autorun.stateChanged.connect(self.autorun_check)
-
-        self.settings_window.autosave.setChecked(bool(self.settings.value('Autosave')))
-        self.settings_window.autosave.stateChanged.connect(
-            lambda: self.settings.setValue('Autosave', int(self.settings_window.autosave.isChecked())))
 
         self.editor_tabs = QTabWidget(self)
         self.editor_tabs.setTabsClosable(True)
@@ -135,6 +180,10 @@ class IdeWindow(QMainWindow):
         self.start_btn.triggered.connect(self.start_program)
         self.menuBar().addAction(self.start_btn)
 
+        self.about_btn = QAction(self)
+        self.about_btn.triggered.connect(self.about_window.exec)
+        self.menuBar().addAction(self.about_btn)
+
         self.exit_btn = QAction(self)
         self.exit_btn.setShortcut(QKeySequence.StandardKey.Close)
         self.exit_btn.triggered.connect(self.close)
@@ -153,15 +202,33 @@ class IdeWindow(QMainWindow):
             self.select_language('en')
             self.select_style('Classic')
 
+        self.settings_window.language.setCurrentText(self.settings.value('Language').upper())
+        self.settings_window.language.currentTextChanged.connect(
+            lambda: self.select_language(self.settings_window.language.currentText().lower()))
+
+        self.settings_window.autorun.setChecked(bool(self.settings.value('Autorun')))
+        self.settings_window.autorun.stateChanged.connect(self.autorun_check)
+
+        self.settings_window.autosave.setChecked(bool(self.settings.value('Autosave')))
+        self.settings_window.autosave.stateChanged.connect(
+            lambda: self.settings.setValue('Autosave', int(self.settings_window.autosave.isChecked())))
+
+        self.settings_window.fonts.setCurrentText(self.settings.value('Font').family())
+        self.settings_window.fonts.currentTextChanged.connect(
+            lambda: self.settings.setValue('Font', QFont(self.settings_window.fonts.currentText(), 12)))
+
     def add_tab(self, filename):
         editor = EditorTab(filename, self)
         editor.textChanged.connect(self.auto_save)
         editor.setFont(self.settings.value('Font'))
-        for lang, r in languages.items():
-            if filename.rsplit('.', maxsplit=1)[-1] in r:
-                editor.setHighlighter(Highlighter(f'highlights/{lang}.hl'))
-                editor.language = lang
-        self.editor_tabs.addTab(editor, filename)
+        editor.contextMenuEvent = TextEditMenu(editor)
+        for langname, language in language_list.items():
+            if filename.rsplit('.', maxsplit=1)[-1] in language['file_formats']:
+                editor.setHighlighter(Highlighter('{}/highlights/{lang}'.format(PATH, lang=language['highlight'])))
+                editor.start_command = language['start_command']
+                editor.language = langname
+        i = self.editor_tabs.addTab(editor, filename)
+        self.editor_tabs.setCurrentIndex(i)
 
     def close_tab(self, tab):
         if self.editor_tabs.currentWidget().saved_text != self.editor_tabs.currentWidget().toPlainText():
@@ -184,10 +251,12 @@ class IdeWindow(QMainWindow):
         self.save_as_btn.setText(texts.save_as_btn[language])
         self.settings_btn.setText(texts.settings_btn[language])
         self.start_btn.setText(texts.start_btn[language])
+        self.about_btn.setText(texts.about_btn[language])
         self.exit_btn.setText(texts.exit_btn[language])
 
         self.settings_window.autorun.setText(texts.autorun[language])
         self.settings_window.autosave.setText(texts.autosave[language])
+        self.settings_window.style_select_group.setTitle(texts.style_select_group[language])
 
     def select_style(self, style_name):
         if style_name in STYLE.keys():
@@ -215,8 +284,8 @@ class IdeWindow(QMainWindow):
 
     def program(self):
         code: EditorTab = self.editor_tabs.currentWidget()
-        if code.language:
-            self.process = subprocess.Popen(start_command[code.language].format(filename=code.filename))
+        if code.language in language_list.keys():
+            self.process = subprocess.Popen(code.start_command.format(filename=code.filename))
             print(f'\033[1m\033[93mExit code: {self.process.wait()}\033[0m\n')
         else:
             print(f'\033[1m\033[93mCan`t start "{code.filename}"\033[0m\n')
@@ -268,32 +337,57 @@ class SettingsDialog(QDialog):
         super().__init__(*args, **kwargs)
         self.setModal(True)
 
-        self.style_select: QGroupBox = QGroupBox(self)
+        self.style_select_group: QGroupBox = QGroupBox(self)
         self.style_select_layout: QVBoxLayout = QVBoxLayout()
-        self.style_select.setLayout(self.style_select_layout)
+        self.style_select_group.setLayout(self.style_select_layout)
 
         self.language: QComboBox = QComboBox(self)
         self.language.addItems(['EN', 'RU', 'DE'])
 
-        self.wgt: QWidget = QWidget()
-        self.lay: QVBoxLayout = QVBoxLayout()
-        self.wgt.setLayout(self.lay)
+        self.fonts: QComboBox = QComboBox(self)
+        self.fonts.addItems(QFontDatabase.families())
+
+        self.check_boxes_group: QGroupBox = QGroupBox(self)
+        self.check_boxes_layout: QVBoxLayout = QVBoxLayout()
+        self.check_boxes_group.setLayout(self.check_boxes_layout)
 
         self.autorun: QCheckBox = QCheckBox(self)
-        self.lay.addWidget(self.autorun)
+        self.check_boxes_layout.addWidget(self.autorun)
 
         self.autosave: QCheckBox = QCheckBox(self)
-        self.lay.addWidget(self.autosave)
+        self.check_boxes_layout.addWidget(self.autosave)
 
         self.m_lay: QGridLayout = QGridLayout(self)
-        self.m_lay.addWidget(self.style_select, 0, 0, 1, 1)
-        self.m_lay.addWidget(self.wgt, 0, 1, 2, 1)
+        self.m_lay.addWidget(self.style_select_group, 0, 0, 1, 1)
+        self.m_lay.addWidget(self.check_boxes_group, 0, 1, 1, 1)
         self.m_lay.addWidget(self.language, 1, 0, 1, 1)
+        self.m_lay.addWidget(self.fonts, 1, 1, 1, 1)
         self.setLayout(self.m_lay)
+
+
+class AboutDialog(QDialog):
+    def __init__(self, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        self.setModal(True)
+        self.setWindowTitle('Vcode v0.1')
+        self.setMinimumSize(250, 200)
+        self.lay = QVBoxLayout()
+
+        self.icon = QLabel(self)
+        self.icon.setPixmap(QPixmap('Vcode.ico').scaled(128, 128))
+        self.icon.resize(128, 128)
+        self.lay.addWidget(self.icon, alignment=Qt.AlignmentFlag.AlignHCenter)
+
+        self.text = QLabel('<div>Vcode<br>Version: 0.1.0<br><br></div><a href="https://ya.ru">Feedback</a>', self)
+        self.text.setOpenExternalLinks(True)
+        self.lay.addWidget(self.text)
+
+        self.setLayout(self.lay)
 
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
+    app.setWindowIcon(QIcon('Vcode.ico'))
     ide = IdeWindow()
     ide.show()
     sys.exit(app.exec())
