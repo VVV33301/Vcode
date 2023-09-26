@@ -1,6 +1,7 @@
 settings_window = {'en': 'Settings', 'ru': 'Настройки', 'de': 'Einstellungen'}
 
 file_menu = {'en': 'File', 'ru': 'Файл', 'de': 'Datei'}
+new_btn = {'en': 'New', 'ru': 'Создать', 'de': 'Erstellen'}
 open_btn = {'en': 'Open', 'ru': 'Открыть', 'de': 'Offen'}
 save_btn = {'en': 'Save', 'ru': 'Сохранить', 'de': 'Speichern'}
 save_as_btn = {'en': 'Save as', 'ru': 'Сохранить как', 'de': 'Speichern als'}

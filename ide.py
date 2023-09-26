@@ -17,6 +17,9 @@ from webbrowser import open as openweb
 PATH: str = sys.argv[0].replace("\\", "/").rsplit("/", maxsplit=1)[0]
 with open('languages.json') as llf:
     language_list: dict = json.load(llf)
+filters = ['All Files (*.*)']
+for i, j in language_list.items():
+    filters.append(f'{i} Files (*.{" *.".join(j["file_formats"])})')
 
 
 def set_autorun(enabled: bool) -> None:
@@ -122,10 +125,11 @@ class TextEditMenu(QMenu):
 
 
 class EditorTab(QTextEdit):
-    def __init__(self, filename: str, *args, **kwargs):
+    def __init__(self, file: str, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.filename: str = filename
-        with open(filename, encoding='utf-8') as cf:
+        self.file: str = file.replace('\\', '/')
+        self.filename: str = file.split('/')[-1]
+        with open(file, encoding='utf-8') as cf:
             self.setText(cf.read())
         self.saved_text: str = self.toPlainText()
         self.highlighter: Highlighter | None = None
@@ -137,7 +141,7 @@ class EditorTab(QTextEdit):
         self.highlighter.setDocument(self.document())
 
     def save(self) -> None:
-        with open(self.filename, 'w', encoding='utf-8') as sf:
+        with open(self.file, 'w', encoding='utf-8') as sf:
             sf.write(self.toPlainText())
         self.saved_text = self.toPlainText()
 
@@ -146,7 +150,6 @@ class IdeWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle('Vcode')
-        self.resize(1000, 700)
 
         self.process = subprocess.Popen('python -V')
         self.process.wait()
@@ -171,6 +174,11 @@ class IdeWindow(QMainWindow):
         self.file_menu = QMenu(self)
         self.menuBar().addMenu(self.file_menu)
 
+        self.new_btn = QAction(self)
+        self.new_btn.setShortcut(QKeySequence.StandardKey.New)
+        self.new_btn.triggered.connect(self.new_file)
+        self.file_menu.addAction(self.new_btn)
+
         self.open_btn = QAction(self)
         self.open_btn.setShortcut(QKeySequence.StandardKey.Open)
         self.open_btn.triggered.connect(self.open_file)
@@ -188,7 +196,7 @@ class IdeWindow(QMainWindow):
 
         self.settings_btn = QAction(self)
         self.settings_btn.triggered.connect(self.settings_window.exec)
-        self.file_menu.addAction(self.settings_btn)
+        self.menuBar().addAction(self.settings_btn)
 
         self.start_btn = QAction(self)
         self.start_btn.setShortcut(QKeySequence.StandardKey.Refresh)
@@ -203,7 +211,7 @@ class IdeWindow(QMainWindow):
         self.about_menu.addAction(self.about_btn)
 
         self.feedback_btn = QAction(self)
-        self.feedback_btn.triggered.connect(lambda: openweb('https://ya.ru'))
+        self.feedback_btn.triggered.connect(lambda: openweb('https://forms.gle/Y21dgoB7ehy3hJjD6'))
         self.about_menu.addAction(self.feedback_btn)
 
         self.exit_btn = QAction(self)
@@ -249,7 +257,7 @@ class IdeWindow(QMainWindow):
                 editor.setHighlighter(Highlighter('{}/highlights/{lang}'.format(PATH, lang=language['highlight'])))
                 editor.start_command = language['start_command']
                 editor.language = langname
-        i = self.editor_tabs.addTab(editor, filename)
+        i = self.editor_tabs.addTab(editor, editor.filename)
         self.editor_tabs.setCurrentIndex(i)
 
     def close_tab(self, tab):
@@ -269,6 +277,7 @@ class IdeWindow(QMainWindow):
 
         self.settings_window.setWindowTitle(texts.settings_window[language])
         self.file_menu.setTitle(texts.file_menu[language])
+        self.new_btn.setText(texts.new_btn[language])
         self.open_btn.setText(texts.open_btn[language])
         self.save_btn.setText(texts.save_btn[language])
         self.save_as_btn.setText(texts.save_as_btn[language])
@@ -310,10 +319,16 @@ class IdeWindow(QMainWindow):
     def program(self):
         code: EditorTab = self.editor_tabs.currentWidget()
         if code.language in language_list.keys():
-            self.process = subprocess.Popen(code.start_command.format(filename=code.filename))
+            self.process = subprocess.Popen(code.start_command.format(filename=code.file))
             print(f'\033[1m\033[93mExit code: {self.process.wait()}\033[0m\n')
         else:
             print(f'\033[1m\033[93mCan`t start "{code.filename}"\033[0m\n')
+
+    def new_file(self):
+        file, _ = QFileDialog.getSaveFileName(directory='untitled', filter=';;'.join(filters))
+        if file:
+            open(file, 'w', encoding='utf-8').close()
+            self.add_tab(file)
 
     def open_file(self):
         file, _ = QFileDialog.getOpenFileName()
