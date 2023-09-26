@@ -12,6 +12,8 @@ from PyQt6.QtGui import *
 import texts
 from style import STYLE
 
+from webbrowser import open as openweb
+
 PATH: str = sys.argv[0].replace("\\", "/").rsplit("/", maxsplit=1)[0]
 with open('languages.json') as llf:
     language_list: dict = json.load(llf)
@@ -99,6 +101,13 @@ class TextEditMenu(QMenu):
         self.select_all.setShortcut(QKeySequence.StandardKey.SelectAll)
         self.addAction(self.select_all)
 
+        self.addSeparator()
+
+        self.start: QAction = QAction(self)
+        self.start.triggered.connect(ide.start_program)
+        self.start.setShortcut(QKeySequence.StandardKey.Refresh)
+        self.addAction(self.start)
+
     def __call__(self, event: QContextMenuEvent) -> None:
         """Call this class to get contect menu"""
         lang: str = ide.settings.value('language')
@@ -108,6 +117,7 @@ class TextEditMenu(QMenu):
         self.copy.setText(texts.copy[lang])
         self.paste.setText(texts.paste[lang])
         self.select_all.setText(texts.select_all[lang])
+        self.start.setText(texts.start_btn[lang])
         self.popup(event.globalPos())
 
 
@@ -115,7 +125,7 @@ class EditorTab(QTextEdit):
     def __init__(self, filename: str, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.filename: str = filename
-        with open(filename) as cf:
+        with open(filename, encoding='utf-8') as cf:
             self.setText(cf.read())
         self.saved_text: str = self.toPlainText()
         self.highlighter: Highlighter | None = None
@@ -127,7 +137,7 @@ class EditorTab(QTextEdit):
         self.highlighter.setDocument(self.document())
 
     def save(self) -> None:
-        with open(self.filename, 'w') as sf:
+        with open(self.filename, 'w', encoding='utf-8') as sf:
             sf.write(self.toPlainText())
         self.saved_text = self.toPlainText()
 
@@ -166,6 +176,11 @@ class IdeWindow(QMainWindow):
         self.open_btn.triggered.connect(self.open_file)
         self.file_menu.addAction(self.open_btn)
 
+        self.save_btn = QAction(self)
+        self.save_btn.setShortcut(QKeySequence.StandardKey.Save)
+        self.save_btn.triggered.connect(lambda: self.editor_tabs.currentWidget().save())
+        self.file_menu.addAction(self.save_btn)
+
         self.save_as_btn = QAction(self)
         self.save_as_btn.setShortcut(QKeySequence.StandardKey.SaveAs)
         self.save_as_btn.triggered.connect(self.save_as)
@@ -180,9 +195,16 @@ class IdeWindow(QMainWindow):
         self.start_btn.triggered.connect(self.start_program)
         self.menuBar().addAction(self.start_btn)
 
+        self.about_menu = QMenu(self)
+        self.menuBar().addMenu(self.about_menu)
+
         self.about_btn = QAction(self)
         self.about_btn.triggered.connect(self.about_window.exec)
-        self.menuBar().addAction(self.about_btn)
+        self.about_menu.addAction(self.about_btn)
+
+        self.feedback_btn = QAction(self)
+        self.feedback_btn.triggered.connect(lambda: openweb('https://ya.ru'))
+        self.about_menu.addAction(self.feedback_btn)
 
         self.exit_btn = QAction(self)
         self.exit_btn.setShortcut(QKeySequence.StandardKey.Close)
@@ -248,10 +270,13 @@ class IdeWindow(QMainWindow):
         self.settings_window.setWindowTitle(texts.settings_window[language])
         self.file_menu.setTitle(texts.file_menu[language])
         self.open_btn.setText(texts.open_btn[language])
+        self.save_btn.setText(texts.save_btn[language])
         self.save_as_btn.setText(texts.save_as_btn[language])
         self.settings_btn.setText(texts.settings_btn[language])
         self.start_btn.setText(texts.start_btn[language])
+        self.about_menu.setTitle(texts.about_menu[language])
         self.about_btn.setText(texts.about_btn[language])
+        self.feedback_btn.setText(texts.feedback_btn[language])
         self.exit_btn.setText(texts.exit_btn[language])
 
         self.settings_window.autorun.setText(texts.autorun[language])
@@ -378,8 +403,11 @@ class AboutDialog(QDialog):
         self.icon.resize(128, 128)
         self.lay.addWidget(self.icon, alignment=Qt.AlignmentFlag.AlignHCenter)
 
-        self.text = QLabel('<div>Vcode<br>Version: 0.1.0<br><br></div><a href="https://ya.ru">Feedback</a>', self)
-        self.text.setOpenExternalLinks(True)
+        self.name = QLabel('Vcode', self)
+        self.name.setFont(QFont('Arial', 18))
+        self.lay.addWidget(self.name, alignment=Qt.AlignmentFlag.AlignHCenter)
+
+        self.text = QLabel('Version: 0.1.0', self)
         self.lay.addWidget(self.text)
 
         self.setLayout(self.lay)
