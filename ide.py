@@ -1,9 +1,11 @@
 import sys
+import os
 import subprocess
 import threading
 import re
 import json
 from winreg import HKEYType, HKEY_CURRENT_USER, KEY_ALL_ACCESS, REG_SZ, OpenKey, SetValueEx, DeleteValue
+from webbrowser import open as openweb
 
 from PyQt6.QtWidgets import *
 from PyQt6.QtCore import *
@@ -12,12 +14,10 @@ from PyQt6.QtGui import *
 import texts
 from style import STYLE
 
-from webbrowser import open as openweb
-
-PATH: str = sys.argv[0].replace("\\", "/").rsplit("/", maxsplit=1)[0]
+PATH: str = os.getcwd()
 with open('languages.json') as llf:
     language_list: dict = json.load(llf)
-filters = ['All Files (*.*)']
+filters: list = ['All Files (*.*)']
 for i, j in language_list.items():
     filters.append(f'{i} Files (*.{" *.".join(j["file_formats"])})')
 
@@ -70,7 +70,7 @@ class TextEditMenu(QMenu):
     """Custom QLineEdit with new QMenu"""
     def __init__(self, parent: QTextEdit, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
-        self.p: QLineEdit = parent
+        self.p: QTextEdit = parent
 
         self.undo: QAction = QAction(self)
         self.undo.triggered.connect(self.p.undo)
@@ -151,14 +151,13 @@ class IdeWindow(QMainWindow):
         super().__init__()
         self.setWindowTitle('Vcode')
 
-        self.process = subprocess.Popen('python -V')
-        self.process.wait()
+        self.process: subprocess.Popen | None = None
 
-        self.settings = QSettings('Vcode', 'Settings')
+        self.settings: QSettings = QSettings('Vcode', 'Settings')
 
-        self.about_window = AboutDialog(self)
+        self.about_window: AboutDialog = AboutDialog(self)
 
-        self.settings_window = SettingsDialog(self)
+        self.settings_window: SettingsDialog = SettingsDialog(self)
         for st in STYLE.keys():
             st_rb: QRadioButton = QRadioButton(st, self)
             if st == self.settings.value('Style'):
@@ -166,55 +165,71 @@ class IdeWindow(QMainWindow):
             st_rb.clicked.connect(lambda: self.select_style(self.sender().text()))
             self.settings_window.style_select_layout.addWidget(st_rb)
 
-        self.editor_tabs = QTabWidget(self)
+        self.editor_tabs: QTabWidget = QTabWidget(self)
         self.editor_tabs.setTabsClosable(True)
         self.editor_tabs.tabCloseRequested.connect(self.close_tab)
-        self.setCentralWidget(self.editor_tabs)
 
-        self.file_menu = QMenu(self)
+        self.model = QFileSystemModel(self)
+        self.model.setRootPath('')
+        self.model.setFilter(QDir.Filter.Hidden | QDir.Filter.AllDirs | QDir.Filter.NoDotAndDotDot | QDir.Filter.Files)
+        self.tree = QTreeView(self)
+        self.tree.setMinimumWidth(100)
+        self.tree.setModel(self.model)
+        self.tree.setColumnHidden(1, True)
+        self.tree.setColumnHidden(2, True)
+        self.tree.setColumnHidden(3, True)
+        self.tree.doubleClicked.connect(lambda x: self.add_tab(self.model.filePath(x)))
+
+        self.splitter = QSplitter()
+        self.splitter.addWidget(self.tree)
+        self.splitter.addWidget(self.editor_tabs)
+        self.splitter.setSizes([150, 500])
+        self.setCentralWidget(self.splitter)
+
+        self.file_menu: QMenu = QMenu(self)
         self.menuBar().addMenu(self.file_menu)
 
-        self.new_btn = QAction(self)
+        self.new_btn: QAction = QAction(self)
         self.new_btn.setShortcut(QKeySequence.StandardKey.New)
         self.new_btn.triggered.connect(self.new_file)
         self.file_menu.addAction(self.new_btn)
 
-        self.open_btn = QAction(self)
+        self.open_btn: QAction = QAction(self)
         self.open_btn.setShortcut(QKeySequence.StandardKey.Open)
         self.open_btn.triggered.connect(self.open_file)
         self.file_menu.addAction(self.open_btn)
 
-        self.save_btn = QAction(self)
+        self.save_btn: QAction = QAction(self)
         self.save_btn.setShortcut(QKeySequence.StandardKey.Save)
         self.save_btn.triggered.connect(lambda: self.editor_tabs.currentWidget().save())
         self.file_menu.addAction(self.save_btn)
 
-        self.save_as_btn = QAction(self)
+        self.save_as_btn: QAction = QAction(self)
         self.save_as_btn.setShortcut(QKeySequence.StandardKey.SaveAs)
         self.save_as_btn.triggered.connect(self.save_as)
         self.file_menu.addAction(self.save_as_btn)
 
-        self.settings_btn = QAction(self)
+        self.settings_btn: QAction = QAction(self)
         self.settings_btn.triggered.connect(self.settings_window.exec)
         self.menuBar().addAction(self.settings_btn)
 
-        self.start_btn = QAction(self)
+        self.start_btn: QAction = QAction(self)
         self.start_btn.setShortcut(QKeySequence.StandardKey.Refresh)
         self.start_btn.triggered.connect(self.start_program)
         self.menuBar().addAction(self.start_btn)
 
-        self.about_menu = QMenu(self)
+        self.about_menu: QAction = QMenu(self)
         self.menuBar().addMenu(self.about_menu)
 
-        self.about_btn = QAction(self)
+        self.about_btn: QAction = QAction(self)
         self.about_btn.triggered.connect(self.about_window.exec)
         self.about_menu.addAction(self.about_btn)
 
-        self.feedback_btn = QAction(self)
+        self.feedback_btn: QAction = QAction(self)
         self.feedback_btn.triggered.connect(lambda: openweb('https://forms.gle/Y21dgoB7ehy3hJjD6'))
         self.about_menu.addAction(self.feedback_btn)
 
-        self.exit_btn = QAction(self)
+        self.exit_btn: QAction = QAction(self)
         self.exit_btn.setShortcut(QKeySequence.StandardKey.Close)
         self.exit_btn.triggered.connect(self.close)
         self.menuBar().addAction(self.exit_btn)
@@ -248,7 +263,11 @@ class IdeWindow(QMainWindow):
             lambda: self.settings.setValue('Font', QFont(self.settings_window.fonts.currentText(), 12)))
 
     def add_tab(self, filename):
-        editor = EditorTab(filename, self)
+        for tab in self.editor_tabs.findChildren(EditorTab):
+            if tab.file == filename:
+                self.editor_tabs.setCurrentWidget(tab)
+                return
+        editor: EditorTab = EditorTab(filename, self)
         editor.textChanged.connect(self.auto_save)
         editor.setFont(self.settings.value('Font'))
         editor.contextMenuEvent = TextEditMenu(editor)
@@ -313,7 +332,8 @@ class IdeWindow(QMainWindow):
                     return
                 else:
                     self.editor_tabs.currentWidget().save_file()
-            self.process.terminate()
+            if self.process:
+                self.process.terminate()
             threading.Thread(target=self.program).start()
 
     def program(self):
@@ -347,7 +367,7 @@ class IdeWindow(QMainWindow):
             self.editor_tabs.currentWidget().save()
 
     def closeEvent(self, a0: QCloseEvent) -> None:
-        if self.process.returncode is None:
+        if self.process and self.process.returncode is None:
             button = QMessageBox.warning(
                 self, 'Warning', 'Do you want to terminate process?',
                 buttons=QMessageBox.StandardButton.Ok | QMessageBox.StandardButton.Cancel,
