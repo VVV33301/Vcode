@@ -1,11 +1,11 @@
 import sys
-import os
 import subprocess
 import threading
 import re
 import json
 from winreg import HKEYType, HKEY_CURRENT_USER, KEY_ALL_ACCESS, REG_SZ, OpenKey, SetValueEx, DeleteValue
 from webbrowser import open as openweb
+from os.path import isfile
 
 from PyQt6.QtWidgets import *
 from PyQt6.QtCore import *
@@ -14,7 +14,6 @@ from PyQt6.QtGui import *
 import texts
 from style import STYLE
 
-PATH: str = os.getcwd()
 with open('languages.json') as llf:
     language_list: dict = json.load(llf)
 filters: list = ['All Files (*.*)']
@@ -129,8 +128,13 @@ class EditorTab(QTextEdit):
         super().__init__(*args, **kwargs)
         self.file: str = file.replace('\\', '/')
         self.filename: str = file.split('/')[-1]
-        with open(file, encoding='utf-8') as cf:
-            self.setText(cf.read())
+        try:
+            with open(file, encoding='utf-8') as cf:
+                self.setText(cf.read())
+        except UnicodeDecodeError:
+            self.setText('Unsupported encoding')
+            self.setReadOnly(True)
+            self.save = lambda: None
         self.saved_text: str = self.toPlainText()
         self.highlighter: Highlighter | None = None
         self.start_command: str | None = None
@@ -168,13 +172,14 @@ class IdeWindow(QMainWindow):
         self.editor_tabs: QTabWidget = QTabWidget(self)
         self.editor_tabs.setTabsClosable(True)
         self.editor_tabs.tabCloseRequested.connect(self.close_tab)
+        self.editor_tabs.currentChanged.connect(self.sel_tab)
 
         self.model = QFileSystemModel(self)
         self.model.setRootPath('')
         self.model.setFilter(QDir.Filter.Hidden | QDir.Filter.AllDirs | QDir.Filter.NoDotAndDotDot | QDir.Filter.Files)
         self.tree = QTreeView(self)
-        self.tree.setMinimumWidth(100)
         self.tree.setModel(self.model)
+        self.tree.setHeaderHidden(True)
         self.tree.setColumnHidden(1, True)
         self.tree.setColumnHidden(2, True)
         self.tree.setColumnHidden(3, True)
@@ -185,6 +190,18 @@ class IdeWindow(QMainWindow):
         self.splitter.addWidget(self.editor_tabs)
         self.splitter.setSizes([150, 500])
         self.setCentralWidget(self.splitter)
+
+        self.tool_bar = QToolBar(self)
+        self.tool_bar.setMovable(False)
+        self.addToolBar(Qt.ToolBarArea.BottomToolBarArea, self.tool_bar)
+
+        self.start_btn: QAction = QAction(self)
+        self.start_btn.setShortcut(QKeySequence.StandardKey.Refresh)
+        self.start_btn.triggered.connect(self.start_program)
+        self.tool_bar.addAction(self.start_btn)
+
+        self.exit_code = QLabel('Exit code: -')
+        self.tool_bar.addWidget(self.exit_code)
 
         self.file_menu: QMenu = QMenu(self)
         self.menuBar().addMenu(self.file_menu)
@@ -213,12 +230,7 @@ class IdeWindow(QMainWindow):
         self.settings_btn.triggered.connect(self.settings_window.exec)
         self.menuBar().addAction(self.settings_btn)
 
-        self.start_btn: QAction = QAction(self)
-        self.start_btn.setShortcut(QKeySequence.StandardKey.Refresh)
-        self.start_btn.triggered.connect(self.start_program)
-        self.menuBar().addAction(self.start_btn)
-
-        self.about_menu: QAction = QMenu(self)
+        self.about_menu: QMenu = QMenu(self)
         self.menuBar().addMenu(self.about_menu)
 
         self.about_btn: QAction = QAction(self)
@@ -262,7 +274,15 @@ class IdeWindow(QMainWindow):
         self.settings_window.fonts.currentTextChanged.connect(
             lambda: self.settings.setValue('Font', QFont(self.settings_window.fonts.currentText(), 12)))
 
+    def sel_tab(self):
+        if self.editor_tabs.count():
+            self.setWindowTitle(self.editor_tabs.tabText(self.editor_tabs.currentIndex()) + ' - Vcode')
+        else:
+            self.setWindowTitle('Vcode')
+
     def add_tab(self, filename):
+        if not isfile(filename):
+            return
         for tab in self.editor_tabs.findChildren(EditorTab):
             if tab.file == filename:
                 self.editor_tabs.setCurrentWidget(tab)
@@ -273,7 +293,7 @@ class IdeWindow(QMainWindow):
         editor.contextMenuEvent = TextEditMenu(editor)
         for langname, language in language_list.items():
             if filename.rsplit('.', maxsplit=1)[-1] in language['file_formats']:
-                editor.setHighlighter(Highlighter('{}/highlights/{lang}'.format(PATH, lang=language['highlight'])))
+                editor.setHighlighter(Highlighter('highlights/{lang}'.format(lang=language['highlight'])))
                 editor.start_command = language['start_command']
                 editor.language = langname
         i = self.editor_tabs.addTab(editor, editor.filename)
@@ -339,10 +359,13 @@ class IdeWindow(QMainWindow):
     def program(self):
         code: EditorTab = self.editor_tabs.currentWidget()
         if code.language in language_list.keys():
-            self.process = subprocess.Popen(code.start_command.format(filename=code.file))
-            print(f'\033[1m\033[93mExit code: {self.process.wait()}\033[0m\n')
+            self.process = subprocess.Popen(f'cmd /c {code.start_command.format(filename=code.file)} & pause',
+                                            creationflags=subprocess.CREATE_NEW_CONSOLE)
+            self.exit_code.setText(f'Exit code: {self.process.wait()}')
+            # print(f'\033[1m\033[93mExit code: {self.process.wait()}\033[0m\n')
         else:
-            print(f'\033[1m\033[93mCan`t start "{code.filename}"\033[0m\n')
+            self.exit_code.setText(f'Can`t start "{code.filename}"')
+            # print(f'\033[1m\033[93mCan`t start "{code.filename}"\033[0m\n')
 
     def new_file(self):
         file, _ = QFileDialog.getSaveFileName(directory='untitled', filter=';;'.join(filters))

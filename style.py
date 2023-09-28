@@ -41,5 +41,9 @@ STYLE = {'Windows': '',
              QComboBox QAbstractItemView::item:hover, QComboBox QAbstractItemView::item:selected {
                  background-color: rgb(45, 45, 54);
              }
+             QToolBar {
+                color: white; 
+                font-size: 18px;
+            }
              ''',
          'White': ''}
