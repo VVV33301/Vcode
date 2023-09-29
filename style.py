@@ -1,6 +1,7 @@
 STYLE = {'Windows': '',
          'Dark':
-             '''QMainWindow {
+             '''
+             QMainWindow {
                  background-color: rgb(80, 80, 90);
                  min-width: 1000px;
                  min-height: 700px;
@@ -17,6 +18,9 @@ STYLE = {'Windows': '',
                  color: rgb(10, 5, 0);
              }
              QTabBar {
+                 background-color: rgb(30, 30, 60);
+             }
+             QTabWidget {
                  background-color: rgb(30, 30, 60);
              }
              QLabel, QRadioButton, QCheckBox {
@@ -43,6 +47,8 @@ STYLE = {'Windows': '',
              }
              QToolBar {
                 color: white; 
+             }
+             QLabel#exit_code {
                 font-size: 18px;
             }
              ''',

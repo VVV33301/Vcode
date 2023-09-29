@@ -1,3 +1,4 @@
+import os
 import sys
 import subprocess
 import threading
@@ -200,7 +201,8 @@ class IdeWindow(QMainWindow):
         self.start_btn.triggered.connect(self.start_program)
         self.tool_bar.addAction(self.start_btn)
 
-        self.exit_code = QLabel('Exit code: -')
+        self.exit_code = QLabel('-')
+        self.exit_code.setObjectName('exit_code')
         self.tool_bar.addWidget(self.exit_code)
 
         self.file_menu: QMenu = QMenu(self)
@@ -218,7 +220,7 @@ class IdeWindow(QMainWindow):
 
         self.save_btn: QAction = QAction(self)
         self.save_btn.setShortcut(QKeySequence.StandardKey.Save)
-        self.save_btn.triggered.connect(lambda: self.editor_tabs.currentWidget().save())
+        self.save_btn.triggered.connect(self.save_file)
         self.file_menu.addAction(self.save_btn)
 
         self.save_as_btn: QAction = QAction(self)
@@ -277,6 +279,12 @@ class IdeWindow(QMainWindow):
     def sel_tab(self):
         if self.editor_tabs.count():
             self.setWindowTitle(self.editor_tabs.tabText(self.editor_tabs.currentIndex()) + ' - Vcode')
+            d: list[str] = self.editor_tabs.currentWidget().file.split('/')
+            for _ in range(len(d)):
+                self.tree.setExpanded(self.model.index('/'.join(d)), True)
+                del d[-1]
+            self.tree.selectionModel().select(self.model.index(self.editor_tabs.currentWidget().file),
+                                              QItemSelectionModel.SelectionFlag.Select)
         else:
             self.setWindowTitle('Vcode')
 
@@ -342,6 +350,10 @@ class IdeWindow(QMainWindow):
 
     def start_program(self):
         if self.editor_tabs.count():
+            if self.process:
+                self.process.terminate()
+                self.process.kill()
+                return
             if not self.settings.value('Autosave') and \
                     self.editor_tabs.currentWidget().saved_text != self.editor_tabs.currentWidget().toPlainText():
                 button = QMessageBox.warning(
@@ -351,21 +363,37 @@ class IdeWindow(QMainWindow):
                 if button == QMessageBox.StandardButton.Cancel:
                     return
                 else:
-                    self.editor_tabs.currentWidget().save_file()
-            if self.process:
-                self.process.terminate()
+                    self.editor_tabs.currentWidget().save()
             threading.Thread(target=self.program).start()
 
     def program(self):
         code: EditorTab = self.editor_tabs.currentWidget()
         if code.language in language_list.keys():
-            self.process = subprocess.Popen(f'cmd /c {code.start_command.format(filename=code.file)} & pause',
-                                            creationflags=subprocess.CREATE_NEW_CONSOLE)
-            self.exit_code.setText(f'Exit code: {self.process.wait()}')
+            with open('process.bat', 'w') as bat:
+                bat.write(f'''
+                @echo off
+                {code.start_command.format(filename=code.file)}
+                echo Exit code: %errorlevel%
+                pause
+                echo %errorlevel% > process.bat
+                ''')
+            self.process = subprocess.Popen('process.bat', creationflags=subprocess.CREATE_NEW_CONSOLE, process_group=subprocess.CREATE_NEW_PROCESS_GROUP)
+            self.process.wait()
+            with open('process.bat') as bat:
+                if len(x := bat.readlines()) == 1:
+                    self.exit_code.setText(f'Exit code: {x[0].rstrip()}')
+                else:
+                    self.exit_code.setText('Interrupted')
+            os.remove('process.bat')
+            self.process = None
             # print(f'\033[1m\033[93mExit code: {self.process.wait()}\033[0m\n')
         else:
             self.exit_code.setText(f'Can`t start "{code.filename}"')
             # print(f'\033[1m\033[93mCan`t start "{code.filename}"\033[0m\n')
+
+    def save_file(self):
+        if self.editor_tabs.count():
+            self.editor_tabs.currentWidget().save()
 
     def new_file(self):
         file, _ = QFileDialog.getSaveFileName(directory='untitled', filter=';;'.join(filters))
@@ -379,10 +407,11 @@ class IdeWindow(QMainWindow):
             self.add_tab(file)
 
     def save_as(self):
-        path, _ = QFileDialog.getOpenFileName()
-        if path:
-            with open(path, 'w') as sf:
-                sf.write(self.editor_tabs.currentWidget().toPlainText())
+        if self.editor_tabs.count():
+            path, _ = QFileDialog.getOpenFileName()
+            if path:
+                with open(path, 'w') as sf:
+                    sf.write(self.editor_tabs.currentWidget().toPlainText())
 
     def auto_save(self):
         if self.settings.value('Autosave'):
