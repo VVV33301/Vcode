@@ -4,9 +4,10 @@ import subprocess
 import threading
 import re
 import json
+import shutil
 from winreg import HKEYType, HKEY_CURRENT_USER, KEY_ALL_ACCESS, REG_SZ, OpenKey, SetValueEx, DeleteValue
 from webbrowser import open as openweb
-from os.path import isfile
+from os.path import isfile, isdir
 
 from PyQt6.QtWidgets import *
 from PyQt6.QtCore import *
@@ -67,7 +68,7 @@ class Highlighter(QSyntaxHighlighter):
 
 
 class TextEditMenu(QMenu):
-    """Custom QLineEdit with new QMenu"""
+    """Custom QTextEdit Menu"""
     def __init__(self, parent: QTextEdit, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self.p: QTextEdit = parent
@@ -124,6 +125,90 @@ class TextEditMenu(QMenu):
         self.popup(event.globalPos())
 
 
+class TreeViewMenu(QMenu):
+    """Custom QTreeView Menu"""
+    def __init__(self, parent: QTreeView, parent_class, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        self.p: QTreeView = parent
+        self.c: IdeWindow = parent_class
+
+        self.new_btn: QAction = QAction(self)
+        self.new_btn.setShortcut(QKeySequence.StandardKey.New)
+        self.new_btn.triggered.connect(self.new_file)
+        self.addAction(self.new_btn)
+
+        self.copy_btn: QAction = QAction(self)
+        self.copy_btn.setShortcut(QKeySequence.StandardKey.Copy)
+        self.copy_btn.triggered.connect(self.copy_file)
+        self.addAction(self.copy_btn)
+
+        self.paste_btn: QAction = QAction(self)
+        self.paste_btn.setShortcut(QKeySequence.StandardKey.Paste)
+        self.paste_btn.triggered.connect(self.paste_file)
+        self.addAction(self.paste_btn)
+
+        self.delete_btn: QAction = QAction(self)
+        self.delete_btn.setShortcut(QKeySequence.StandardKey.Delete)
+        self.delete_btn.triggered.connect(self.delete_file)
+        self.addAction(self.delete_btn)
+
+        self.rename_btn: QAction = QAction(self)
+        self.rename_btn.triggered.connect(self.rename_file)
+        self.addAction(self.rename_btn)
+
+    def __call__(self, event: QContextMenuEvent) -> None:
+        lang: str = ide.settings.value('language')
+        self.new_btn.setText(texts.new_btn[lang])
+        self.copy_btn.setText(texts.copy[lang])
+        self.paste_btn.setText(texts.paste[lang])
+        self.delete_btn.setText(texts.delete_btn[lang])
+        self.rename_btn.setText(texts.rename_btn[lang])
+        self.popup(event.globalPos())
+
+    def new_file(self):
+        file = QInputDialog(self)
+        file.exec()
+        if file.textValue():
+            if file.textValue().endswith(('/', '\\')):
+                os.mkdir(self.c.model.filePath(self.c.tree.selectedIndexes()[0]) + '/' + file.textValue())
+            else:
+                x = self.c.model.filePath(self.c.tree.selectedIndexes()[0]) + '/' + file.textValue()
+                open(x, 'w', encoding='utf-8').close()
+                self.c.add_tab(x)
+
+    def copy_file(self):
+        n = self.c.model.filePath(self.c.tree.selectedIndexes()[0])
+        if isfile(n) or isdir(n):
+            os.system(f'powershell -command "Set-Clipboard -Path "{n}""')
+
+    def paste_file(self):
+        path = app.clipboard().mimeData().urls()[0].url().replace('file:///', '')
+        new_path = self.c.model.filePath(self.c.tree.selectedIndexes()[0])
+        if isdir(new_path):
+            if isfile(path):
+                shutil.copy2(path, new_path + '/' + app.clipboard().mimeData().urls()[0].fileName())
+            elif isdir(path):
+                shutil.copytree(path, new_path + '/' + path.rsplit('/', maxsplit=1)[-1])
+
+    def delete_file(self):
+        n = self.c.model.filePath(self.c.tree.selectedIndexes()[0])
+        if isfile(n):
+            os.remove(n)
+        elif isdir(n):
+            shutil.rmtree(n)
+
+    def rename_file(self):
+        file = QInputDialog(self)
+        path, name = self.c.model.filePath(self.c.tree.selectedIndexes()[0]).rsplit('/', maxsplit=1)
+        file.setTextValue(name)
+        file.exec()
+        if file.textValue() != name:
+            try:
+                os.rename(path + '/' + name, path + '/' + file.textValue())
+            except Exception:
+                pass
+
+
 class EditorTab(QTextEdit):
     def __init__(self, file: str, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -151,6 +236,22 @@ class EditorTab(QTextEdit):
         self.saved_text = self.toPlainText()
 
 
+class TabWidget(QTabWidget):
+    def __init__(self, *args):
+        super().__init__(*args)
+        self.lalay = QHBoxLayout()
+        self.empty_widget = QPushButton('Open file', self)
+        self.lalay.addWidget(self.empty_widget, alignment=Qt.AlignmentFlag.AlignCenter)
+        self.setLayout(self.lalay)
+        self.currentChanged.connect(self.empty)
+
+    def empty(self):
+        if not self.count():
+            self.la.setVisible(True)
+        else:
+            self.la.setVisible(False)
+
+
 class IdeWindow(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -170,10 +271,11 @@ class IdeWindow(QMainWindow):
             st_rb.clicked.connect(lambda: self.select_style(self.sender().text()))
             self.settings_window.style_select_layout.addWidget(st_rb)
 
-        self.editor_tabs: QTabWidget = QTabWidget(self)
+        self.editor_tabs: TabWidget = TabWidget(self)
         self.editor_tabs.setTabsClosable(True)
         self.editor_tabs.tabCloseRequested.connect(self.close_tab)
         self.editor_tabs.currentChanged.connect(self.sel_tab)
+        self.editor_tabs.empty_widget.clicked.connect(self.open_file)
 
         self.model = QFileSystemModel(self)
         self.model.setRootPath('')
@@ -185,6 +287,7 @@ class IdeWindow(QMainWindow):
         self.tree.setColumnHidden(2, True)
         self.tree.setColumnHidden(3, True)
         self.tree.doubleClicked.connect(lambda x: self.add_tab(self.model.filePath(x)))
+        self.tree.contextMenuEvent = TreeViewMenu(self.tree, self)
 
         self.splitter = QSplitter()
         self.splitter.addWidget(self.tree)
@@ -201,6 +304,7 @@ class IdeWindow(QMainWindow):
         self.start_btn.triggered.connect(self.start_program)
         self.tool_bar.addAction(self.start_btn)
 
+        self.tool_bar.addSeparator()
         self.exit_code = QLabel('-')
         self.exit_code.setObjectName('exit_code')
         self.tool_bar.addWidget(self.exit_code)
@@ -243,11 +347,6 @@ class IdeWindow(QMainWindow):
         self.feedback_btn.triggered.connect(lambda: openweb('https://forms.gle/Y21dgoB7ehy3hJjD6'))
         self.about_menu.addAction(self.feedback_btn)
 
-        self.exit_btn: QAction = QAction(self)
-        self.exit_btn.setShortcut(QKeySequence.StandardKey.Close)
-        self.exit_btn.triggered.connect(self.close)
-        self.menuBar().addAction(self.exit_btn)
-
         if len(self.settings.allKeys()) == 5:
             self.select_language(self.settings.value('Language'))
             self.select_style(self.settings.value('Style'))
@@ -273,8 +372,10 @@ class IdeWindow(QMainWindow):
             lambda: self.settings.setValue('Autosave', int(self.settings_window.autosave.isChecked())))
 
         self.settings_window.fonts.setCurrentText(self.settings.value('Font').family())
-        self.settings_window.fonts.currentTextChanged.connect(
-            lambda: self.settings.setValue('Font', QFont(self.settings_window.fonts.currentText(), 12)))
+        self.settings_window.fonts.currentTextChanged.connect(self.select_font)
+
+        self.settings_window.font_size.setValue(self.settings.value('Font').pointSize())
+        self.settings_window.font_size.valueChanged.connect(self.select_font)
 
     def sel_tab(self):
         if self.editor_tabs.count():
@@ -304,8 +405,7 @@ class IdeWindow(QMainWindow):
                 editor.setHighlighter(Highlighter('highlights/{lang}'.format(lang=language['highlight'])))
                 editor.start_command = language['start_command']
                 editor.language = langname
-        i = self.editor_tabs.addTab(editor, editor.filename)
-        self.editor_tabs.setCurrentIndex(i)
+        self.editor_tabs.setCurrentIndex(self.editor_tabs.addTab(editor, editor.filename))
 
     def close_tab(self, tab):
         if self.editor_tabs.currentWidget().saved_text != self.editor_tabs.currentWidget().toPlainText():
@@ -323,6 +423,8 @@ class IdeWindow(QMainWindow):
         self.settings.setValue('Language', language)
 
         self.settings_window.setWindowTitle(texts.settings_window[language])
+        self.editor_tabs.empty_widget.setText(texts.open_btn[language])
+
         self.file_menu.setTitle(texts.file_menu[language])
         self.new_btn.setText(texts.new_btn[language])
         self.open_btn.setText(texts.open_btn[language])
@@ -333,16 +435,22 @@ class IdeWindow(QMainWindow):
         self.about_menu.setTitle(texts.about_menu[language])
         self.about_btn.setText(texts.about_btn[language])
         self.feedback_btn.setText(texts.feedback_btn[language])
-        self.exit_btn.setText(texts.exit_btn[language])
 
         self.settings_window.autorun.setText(texts.autorun[language])
         self.settings_window.autosave.setText(texts.autosave[language])
         self.settings_window.style_select_group.setTitle(texts.style_select_group[language])
+        self.settings_window.font_select_group.setTitle(texts.font_select_group[language])
 
     def select_style(self, style_name):
         if style_name in STYLE.keys():
             self.settings.setValue('Style', style_name)
             self.setStyleSheet(STYLE[style_name])
+
+    def select_font(self):
+        font = QFont(self.settings_window.fonts.currentText(), self.settings_window.font_size.value())
+        self.settings.setValue('Font', font)
+        for tab in self.editor_tabs.findChildren(EditorTab):
+            tab.setFont(font)
 
     def autorun_check(self):
         self.settings.setValue('Autorun', int(self.settings_window.autorun.isChecked()))
@@ -386,10 +494,8 @@ class IdeWindow(QMainWindow):
                     self.exit_code.setText('Interrupted')
             os.remove('process.bat')
             self.process = None
-            # print(f'\033[1m\033[93mExit code: {self.process.wait()}\033[0m\n')
         else:
             self.exit_code.setText(f'Can`t start "{code.filename}"')
-            # print(f'\033[1m\033[93mCan`t start "{code.filename}"\033[0m\n')
 
     def save_file(self):
         if self.editor_tabs.count():
@@ -456,8 +562,16 @@ class SettingsDialog(QDialog):
         self.language: QComboBox = QComboBox(self)
         self.language.addItems(['EN', 'RU', 'DE'])
 
+        self.font_select_group: QGroupBox = QGroupBox(self)
+        self.font_select_layout: QHBoxLayout = QHBoxLayout()
+        self.font_select_group.setLayout(self.font_select_layout)
+
         self.fonts: QComboBox = QComboBox(self)
         self.fonts.addItems(QFontDatabase.families())
+        self.font_select_layout.addWidget(self.fonts)
+
+        self.font_size: QSpinBox = QSpinBox(self)
+        self.font_select_layout.addWidget(self.font_size)
 
         self.check_boxes_group: QGroupBox = QGroupBox(self)
         self.check_boxes_layout: QVBoxLayout = QVBoxLayout()
@@ -473,7 +587,7 @@ class SettingsDialog(QDialog):
         self.m_lay.addWidget(self.style_select_group, 0, 0, 1, 1)
         self.m_lay.addWidget(self.check_boxes_group, 0, 1, 1, 1)
         self.m_lay.addWidget(self.language, 1, 0, 1, 1)
-        self.m_lay.addWidget(self.fonts, 1, 1, 1, 1)
+        self.m_lay.addWidget(self.font_select_group, 1, 1, 1, 1)
         self.setLayout(self.m_lay)
 
 
@@ -494,7 +608,7 @@ class AboutDialog(QDialog):
         self.name.setFont(QFont('Arial', 18))
         self.lay.addWidget(self.name, alignment=Qt.AlignmentFlag.AlignHCenter)
 
-        self.text = QLabel('Version: 0.1.0', self)
+        self.text = QLabel('Version: 0.1.0\n\nVladimir Varenik\nAll rights reserved', self)
         self.lay.addWidget(self.text)
 
         self.setLayout(self.lay)

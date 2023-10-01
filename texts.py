@@ -10,11 +10,13 @@ start_btn = {'en': 'Start', 'ru': 'Запустить', 'de': 'Start'}
 about_menu = {'en': 'About', 'ru': 'Справка', 'de': 'Referenz'}
 about_btn = {'en': 'About program', 'ru': 'О программе', 'de': 'Über das Programm'}
 feedback_btn = {'en': 'Feedback', 'ru': 'Обратная связь', 'de': 'Rückmeldung'}
-exit_btn = {'en': 'Exit', 'ru': 'Выход', 'de': 'Ausfahrt'}
+delete_btn = {'en': 'Delete', 'ru': 'Удалить', 'de': 'Löschen'}
+rename_btn = {'en': 'Rename', 'ru': 'Переименовать', 'de': 'Umbenennen'}
 
 autorun = {'en': 'Autorun', 'ru': 'Автозагрузка', 'de': 'Automatisch laden'}
 autosave = {'en': 'Autosave', 'ru': 'Автосохранение', 'de': 'Automatisches Speichern'}
 style_select_group = {'en': 'Style', 'ru': 'Стиль', 'de': 'Stil'}
+font_select_group = {'en': 'Font', 'ru': 'Шрифт', 'de': 'Schriftart'}
 
 undo = {'en': 'Undo', 'ru': 'Отменить', 'de': 'Rückgängig'}
 redo = {'en': 'Redo', 'ru': 'Повторить', 'de': 'Wiederherstellen'}
