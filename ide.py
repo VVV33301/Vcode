@@ -57,7 +57,7 @@ class Highlighter(QSyntaxHighlighter):
                         case 'underline_color':
                             text_char.setUnderlineColor(QColor(*params['underline_color']))
                         case 'underline_style':
-                            text_char.setUnderlineStyle(int(params['underline_style']))
+                            text_char.setUnderlineStyle(QTextCharFormat.UnderlineStyle(int(params['underline_style'])))
                 self._mapping[rf'{expression}'] = text_char
 
     def highlightBlock(self, text: str) -> None:
@@ -235,6 +235,13 @@ class EditorTab(QTextEdit):
             sf.write(self.toPlainText())
         self.saved_text = self.toPlainText()
 
+    def keyPressEvent(self, e: QKeyEvent):
+        if e.key() == Qt.Key.Key_Tab:
+            self.textCursor().insertText('    ')
+            e.ignore()
+        else:
+            QTextEdit.keyPressEvent(self, e)
+
 
 class TabWidget(QTabWidget):
     def __init__(self, *args):
@@ -247,9 +254,9 @@ class TabWidget(QTabWidget):
 
     def empty(self):
         if not self.count():
-            self.la.setVisible(True)
+            self.empty_widget.setVisible(True)
         else:
-            self.la.setVisible(False)
+            self.empty_widget.setVisible(False)
 
 
 class IdeWindow(QMainWindow):
@@ -303,6 +310,10 @@ class IdeWindow(QMainWindow):
         self.start_btn.setShortcut(QKeySequence.StandardKey.Refresh)
         self.start_btn.triggered.connect(self.start_program)
         self.tool_bar.addAction(self.start_btn)
+
+        self.terminal_btn: QAction = QAction(self)
+        self.terminal_btn.triggered.connect(lambda: os.system('start "Vcode terminal" powershell'))
+        self.tool_bar.addAction(self.terminal_btn)
 
         self.tool_bar.addSeparator()
         self.exit_code = QLabel('-')
@@ -402,7 +413,7 @@ class IdeWindow(QMainWindow):
         editor.contextMenuEvent = TextEditMenu(editor)
         for langname, language in language_list.items():
             if filename.rsplit('.', maxsplit=1)[-1] in language['file_formats']:
-                editor.setHighlighter(Highlighter('highlights/{lang}'.format(lang=language['highlight'])))
+                editor.setHighlighter(Highlighter(language['highlight']))
                 editor.start_command = language['start_command']
                 editor.language = langname
         self.editor_tabs.setCurrentIndex(self.editor_tabs.addTab(editor, editor.filename))
@@ -410,13 +421,14 @@ class IdeWindow(QMainWindow):
     def close_tab(self, tab):
         if self.editor_tabs.currentWidget().saved_text != self.editor_tabs.currentWidget().toPlainText():
             button = QMessageBox.warning(
-                self, 'Warning', 'Do you want to save changes?',
-                buttons=QMessageBox.StandardButton.Save | QMessageBox.StandardButton.Cancel,
+                self, 'Warning', texts.save_warning[self.settings.value('Language')],
+                buttons=QMessageBox.StandardButton.Save | QMessageBox.StandardButton.Discard |
+                        QMessageBox.StandardButton.Cancel,
                 defaultButton=QMessageBox.StandardButton.Save)
             if button == QMessageBox.StandardButton.Cancel:
                 return
-            else:
-                self.editor_tabs.currentWidget().save_file()
+            elif button == QMessageBox.StandardButton.Save:
+                self.editor_tabs.currentWidget().save()
         self.editor_tabs.removeTab(tab)
 
     def select_language(self, language):
@@ -432,6 +444,7 @@ class IdeWindow(QMainWindow):
         self.save_as_btn.setText(texts.save_as_btn[language])
         self.settings_btn.setText(texts.settings_btn[language])
         self.start_btn.setText(texts.start_btn[language])
+        self.terminal_btn.setText(texts.terminal_btn[language])
         self.about_menu.setTitle(texts.about_menu[language])
         self.about_btn.setText(texts.about_btn[language])
         self.feedback_btn.setText(texts.feedback_btn[language])
@@ -465,7 +478,7 @@ class IdeWindow(QMainWindow):
             if not self.settings.value('Autosave') and \
                     self.editor_tabs.currentWidget().saved_text != self.editor_tabs.currentWidget().toPlainText():
                 button = QMessageBox.warning(
-                    self, 'Warning', 'Do you want to save changes?',
+                    self, 'Warning', texts.save_warning[self.settings.value('Language')],
                     buttons=QMessageBox.StandardButton.Save | QMessageBox.StandardButton.Cancel,
                     defaultButton=QMessageBox.StandardButton.Save)
                 if button == QMessageBox.StandardButton.Cancel:
@@ -485,7 +498,8 @@ class IdeWindow(QMainWindow):
                 pause
                 echo %errorlevel% > process.bat
                 ''')
-            self.process = subprocess.Popen('process.bat', creationflags=subprocess.CREATE_NEW_CONSOLE, process_group=subprocess.CREATE_NEW_PROCESS_GROUP)
+            self.process = subprocess.Popen('process.bat', creationflags=subprocess.CREATE_NEW_CONSOLE,
+                                            process_group=subprocess.CREATE_NEW_PROCESS_GROUP)
             self.process.wait()
             with open('process.bat') as bat:
                 if len(x := bat.readlines()) == 1:
@@ -502,19 +516,21 @@ class IdeWindow(QMainWindow):
             self.editor_tabs.currentWidget().save()
 
     def new_file(self):
-        file, _ = QFileDialog.getSaveFileName(directory='untitled', filter=';;'.join(filters))
+        file, _ = QFileDialog.getSaveFileName(directory='C:/untitled', filter=';;'.join(filters))
         if file:
             open(file, 'w', encoding='utf-8').close()
             self.add_tab(file)
 
     def open_file(self):
-        file, _ = QFileDialog.getOpenFileName()
+        file, _ = QFileDialog.getOpenFileName(directory=os.path.expanduser('~'), filter=';;'.join(filters))
         if file:
             self.add_tab(file)
 
     def save_as(self):
         if self.editor_tabs.count():
-            path, _ = QFileDialog.getOpenFileName()
+            path, _ = QFileDialog.getSaveFileName(
+                directory=os.path.expanduser('~') + '/' + self.editor_tabs.currentWidget().filename,
+                filter=';;'.join(filters))
             if path:
                 with open(path, 'w') as sf:
                     sf.write(self.editor_tabs.currentWidget().toPlainText())
@@ -525,29 +541,22 @@ class IdeWindow(QMainWindow):
             self.editor_tabs.currentWidget().save()
 
     def closeEvent(self, a0: QCloseEvent) -> None:
-        if self.process and self.process.returncode is None:
-            button = QMessageBox.warning(
-                self, 'Warning', 'Do you want to terminate process?',
-                buttons=QMessageBox.StandardButton.Ok | QMessageBox.StandardButton.Cancel,
-                defaultButton=QMessageBox.StandardButton.Ok)
-            if button == QMessageBox.StandardButton.Cancel:
-                a0.ignore()
-            else:
-                self.process.terminate()
         for tab in self.editor_tabs.findChildren(EditorTab):
             if tab.saved_text != tab.toPlainText():
                 button = QMessageBox.warning(
-                    self, 'Warning', 'Do you want to save changes in file {}?'.format(tab.filename),
+                    self, 'Warning', texts.save_warning[self.settings.value('Language')],
                     buttons=QMessageBox.StandardButton.Save | QMessageBox.StandardButton.Discard |
                             QMessageBox.StandardButton.Cancel,
                     defaultButton=QMessageBox.StandardButton.Save)
                 if button == QMessageBox.StandardButton.Cancel:
                     a0.ignore()
                 elif button == QMessageBox.StandardButton.Save:
-                    tab.save()
+                    for stab in self.editor_tabs.findChildren(EditorTab):
+                        stab.save()
                     a0.accept()
                 else:
                     a0.accept()
+                break
 
 
 class SettingsDialog(QDialog):
