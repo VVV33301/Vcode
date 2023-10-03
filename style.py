@@ -4,8 +4,6 @@ STYLE = {
         '''
         QMainWindow {
             background-color: rgb(80, 80, 90);
-            min-width: 1000px;
-            min-height: 700px;
         } 
         QDialog, QWidget {
             background-color: rgb(80, 80, 90);

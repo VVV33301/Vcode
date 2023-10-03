@@ -7,7 +7,7 @@ import json
 import shutil
 from winreg import HKEYType, HKEY_CURRENT_USER, KEY_ALL_ACCESS, REG_SZ, OpenKey, SetValueEx, DeleteValue
 from webbrowser import open as openweb
-from os.path import isfile, isdir
+from os.path import isfile, isdir, dirname, abspath, join
 
 from PyQt6.QtWidgets import *
 from PyQt6.QtCore import *
@@ -16,7 +16,24 @@ from PyQt6.QtGui import *
 import texts
 from style import STYLE
 
-with open('languages.json') as llf:
+
+def resource_path(relative_path):
+    base_path = getattr(sys, '_MEIPASS', dirname(abspath(sys.argv[0])))
+    return join(base_path, relative_path)
+
+
+encodings = ['ascii', 'big5', 'big5hkscs', 'cp037', 'cp1006', 'cp1026', 'cp1125', 'cp1140', 'cp1250', 'cp1251',
+             'cp1252', 'cp1253', 'cp1254', 'cp1255', 'cp1256', 'cp1257', 'cp1258', 'cp273', 'cp424', 'cp437', 'cp500',
+             'cp720', 'cp737', 'cp775', 'cp850', 'cp852', 'cp855', 'cp856', 'cp857', 'cp858', 'cp860', 'cp861', 'cp862',
+             'cp863', 'cp864', 'cp865', 'cp866', 'cp869', 'cp874', 'cp875', 'cp932', 'cp949', 'cp950', 'euc_jis_2004',
+             'euc_jisx0213', 'euc_jp', 'euc_kr', 'gb18030', 'gb2312', 'gbk', 'hz', 'iso2022_jp', 'iso2022_jp_1',
+             'iso2022_jp_2', 'iso2022_jp_2004', 'iso2022_jp_3', 'iso2022_jp_ext', 'iso2022_kr', 'iso8859-1',
+             'iso8859-10', 'iso8859-11', 'iso8859-13', 'iso8859-14', 'iso8859-15', 'iso8859-16', 'iso8859-2',
+             'iso8859-3', 'iso8859-4', 'iso8859-5', 'iso8859-6', 'iso8859-7', 'iso8859-8', 'iso8859-9', 'johab',
+             'koi8-r', 'koi8-t', 'koi8-u', 'kz1048', 'mac-cyrillic', 'mac-greek', 'mac-iceland', 'mac-latin2',
+             'mac-roman', 'mac-turkish', 'ptcp154', 'shift_jis', 'shift_jis_2004', 'shift_jisx0213', 'utf-16',
+             'utf-16-be', 'utf-16-le', 'utf-32', 'utf-32-be', 'utf-32-le', 'utf-7', 'utf-8', 'utf-8-sig']
+with open(resource_path('languages.json')) as llf:
     language_list: dict = json.load(llf)
 filters: list = ['All Files (*.*)']
 for i, j in language_list.items():
@@ -39,7 +56,7 @@ class Highlighter(QSyntaxHighlighter):
         self._mapping = {}
         with open(highlight_path) as highlight_file:
             for string in highlight_file.read().replace('\n', '').split(';')[:-1]:
-                expression, parameters = string.split(' = ')
+                expression, parameters = string.rsplit(' = ', maxsplit=1)
                 params = json.loads(parameters)
                 text_char = QTextCharFormat()
                 for parameter in params.keys():
@@ -69,6 +86,7 @@ class Highlighter(QSyntaxHighlighter):
 
 class TextEditMenu(QMenu):
     """Custom QTextEdit Menu"""
+
     def __init__(self, parent: QTextEdit, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self.p: QTextEdit = parent
@@ -112,9 +130,10 @@ class TextEditMenu(QMenu):
         self.start.setShortcut(QKeySequence.StandardKey.Refresh)
         self.addAction(self.start)
 
+        self.lang_s = QSettings('Vcode', 'Settings')
+
     def __call__(self, event: QContextMenuEvent) -> None:
-        """Call this class to get contect menu"""
-        lang: str = ide.settings.value('language')
+        lang: str = self.lang_s.value('Language')
         self.undo.setText(texts.undo[lang])
         self.redo.setText(texts.redo[lang])
         self.cut.setText(texts.cut[lang])
@@ -127,6 +146,7 @@ class TextEditMenu(QMenu):
 
 class TreeViewMenu(QMenu):
     """Custom QTreeView Menu"""
+
     def __init__(self, parent: QTreeView, parent_class, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self.p: QTreeView = parent
@@ -156,8 +176,10 @@ class TreeViewMenu(QMenu):
         self.rename_btn.triggered.connect(self.rename_file)
         self.addAction(self.rename_btn)
 
+        self.lang_s = QSettings('Vcode', 'Settings')
+
     def __call__(self, event: QContextMenuEvent) -> None:
-        lang: str = ide.settings.value('language')
+        lang: str = self.lang_s.value('Language')
         self.new_btn.setText(texts.new_btn[lang])
         self.copy_btn.setText(texts.copy[lang])
         self.paste_btn.setText(texts.paste[lang])
@@ -173,7 +195,7 @@ class TreeViewMenu(QMenu):
                 os.mkdir(self.c.model.filePath(self.c.tree.selectedIndexes()[0]) + '/' + file.textValue())
             else:
                 x = self.c.model.filePath(self.c.tree.selectedIndexes()[0]) + '/' + file.textValue()
-                open(x, 'w', encoding='utf-8').close()
+                open(x, 'w', encoding=self.lang_s.value('Encoding')).close()
                 self.c.add_tab(x)
 
     def copy_file(self):
@@ -212,10 +234,11 @@ class TreeViewMenu(QMenu):
 class EditorTab(QTextEdit):
     def __init__(self, file: str, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.enc_s = QSettings('Vcode', 'Settings')
         self.file: str = file.replace('\\', '/')
         self.filename: str = file.split('/')[-1]
         try:
-            with open(file, encoding='utf-8') as cf:
+            with open(file, encoding=self.enc_s.value('Encoding')) as cf:
                 self.setText(cf.read())
         except UnicodeDecodeError:
             self.setText('Unsupported encoding')
@@ -231,14 +254,17 @@ class EditorTab(QTextEdit):
         self.highlighter.setDocument(self.document())
 
     def save(self) -> None:
-        with open(self.file, 'w', encoding='utf-8') as sf:
+        with open(self.file, 'w', encoding=self.enc_s.value('Encoding')) as sf:
             sf.write(self.toPlainText())
         self.saved_text = self.toPlainText()
 
     def keyPressEvent(self, e: QKeyEvent):
         if e.key() == Qt.Key.Key_Tab:
             self.textCursor().insertText('    ')
-            e.ignore()
+            e.accept()
+        elif e.key() == Qt.Key.Key_Return and self.toPlainText()[self.textCursor().position() - 1] == ':':
+            self.textCursor().insertText('\n    ')
+            e.accept()
         else:
             QTextEdit.keyPressEvent(self, e)
 
@@ -263,6 +289,7 @@ class IdeWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle('Vcode')
+        self.setMinimumSize(1000, 700)
 
         self.process: subprocess.Popen | None = None
 
@@ -358,22 +385,27 @@ class IdeWindow(QMainWindow):
         self.feedback_btn.triggered.connect(lambda: openweb('https://forms.gle/Y21dgoB7ehy3hJjD6'))
         self.about_menu.addAction(self.feedback_btn)
 
-        if len(self.settings.allKeys()) == 5:
+        if len(self.settings.allKeys()) == 6:
             self.select_language(self.settings.value('Language'))
             self.select_style(self.settings.value('Style'))
         else:
             self.settings.setValue('Autorun', 0)
             self.settings.setValue('Autosave', 0)
-            if 'JetBrains Mono' in QFontDatabase.families():
-                self.settings.setValue('Font', QFont('JetBrains Mono', 12))
-            else:
+            if 'Consolas' in QFontDatabase.families():
                 self.settings.setValue('Font', QFont('Consolas', 12))
+            else:
+                self.settings.setValue('Font', QFont())
             self.select_language('en')
-            self.select_style('Classic')
+            self.select_style('Windows')
+            self.settings.setValue('Encoding', 'utf-8')
 
         self.settings_window.language.setCurrentText(self.settings.value('Language').upper())
         self.settings_window.language.currentTextChanged.connect(
             lambda: self.select_language(self.settings_window.language.currentText().lower()))
+
+        self.settings_window.encoding.setCurrentText(self.settings.value('Encoding'))
+        self.settings_window.encoding.currentTextChanged.connect(
+            lambda: self.settings.setValue('Encoding', self.settings_window.encoding.currentText()))
 
         self.settings_window.autorun.setChecked(bool(self.settings.value('Autorun')))
         self.settings_window.autorun.stateChanged.connect(self.autorun_check)
@@ -405,6 +437,7 @@ class IdeWindow(QMainWindow):
             return
         for tab in self.editor_tabs.findChildren(EditorTab):
             if tab.file == filename:
+                print(1)
                 self.editor_tabs.setCurrentWidget(tab)
                 return
         editor: EditorTab = EditorTab(filename, self)
@@ -413,13 +446,14 @@ class IdeWindow(QMainWindow):
         editor.contextMenuEvent = TextEditMenu(editor)
         for langname, language in language_list.items():
             if filename.rsplit('.', maxsplit=1)[-1] in language['file_formats']:
-                editor.setHighlighter(Highlighter(language['highlight']))
+                editor.setHighlighter(Highlighter(resource_path(language['highlight'])))
                 editor.start_command = language['start_command']
                 editor.language = langname
         self.editor_tabs.setCurrentIndex(self.editor_tabs.addTab(editor, editor.filename))
 
     def close_tab(self, tab):
-        if self.editor_tabs.currentWidget().saved_text != self.editor_tabs.currentWidget().toPlainText():
+        widget: EditorTab = self.editor_tabs.widget(tab)
+        if widget.saved_text != widget.toPlainText():
             button = QMessageBox.warning(
                 self, 'Warning', texts.save_warning[self.settings.value('Language')],
                 buttons=QMessageBox.StandardButton.Save | QMessageBox.StandardButton.Discard |
@@ -428,8 +462,9 @@ class IdeWindow(QMainWindow):
             if button == QMessageBox.StandardButton.Cancel:
                 return
             elif button == QMessageBox.StandardButton.Save:
-                self.editor_tabs.currentWidget().save()
+                widget.save()
         self.editor_tabs.removeTab(tab)
+        widget.deleteLater()
 
     def select_language(self, language):
         self.settings.setValue('Language', language)
@@ -516,9 +551,10 @@ class IdeWindow(QMainWindow):
             self.editor_tabs.currentWidget().save()
 
     def new_file(self):
-        file, _ = QFileDialog.getSaveFileName(directory='C:/untitled', filter=';;'.join(filters))
+        file, _ = QFileDialog.getSaveFileName(directory=os.path.expanduser('~') + '/untitled',
+                                              filter=';;'.join(filters))
         if file:
-            open(file, 'w', encoding='utf-8').close()
+            open(file, 'w', encoding=self.settings.value('Encoding')).close()
             self.add_tab(file)
 
     def open_file(self):
@@ -568,9 +604,6 @@ class SettingsDialog(QDialog):
         self.style_select_layout: QVBoxLayout = QVBoxLayout()
         self.style_select_group.setLayout(self.style_select_layout)
 
-        self.language: QComboBox = QComboBox(self)
-        self.language.addItems(['EN', 'RU', 'DE'])
-
         self.font_select_group: QGroupBox = QGroupBox(self)
         self.font_select_layout: QHBoxLayout = QHBoxLayout()
         self.font_select_group.setLayout(self.font_select_layout)
@@ -586,17 +619,24 @@ class SettingsDialog(QDialog):
         self.check_boxes_layout: QVBoxLayout = QVBoxLayout()
         self.check_boxes_group.setLayout(self.check_boxes_layout)
 
+        self.language: QComboBox = QComboBox(self)
+        self.language.addItems(['EN', 'RU', 'DE'])
+        self.check_boxes_layout.addWidget(self.language)
+
         self.autorun: QCheckBox = QCheckBox(self)
         self.check_boxes_layout.addWidget(self.autorun)
 
         self.autosave: QCheckBox = QCheckBox(self)
         self.check_boxes_layout.addWidget(self.autosave)
 
+        self.encoding: QComboBox = QComboBox(self)
+        self.encoding.addItems(encodings)
+        self.check_boxes_layout.addWidget(self.encoding)
+
         self.m_lay: QGridLayout = QGridLayout(self)
         self.m_lay.addWidget(self.style_select_group, 0, 0, 1, 1)
         self.m_lay.addWidget(self.check_boxes_group, 0, 1, 1, 1)
-        self.m_lay.addWidget(self.language, 1, 0, 1, 1)
-        self.m_lay.addWidget(self.font_select_group, 1, 1, 1, 1)
+        self.m_lay.addWidget(self.font_select_group, 1, 0, 1, 2)
         self.setLayout(self.m_lay)
 
 
@@ -604,12 +644,12 @@ class AboutDialog(QDialog):
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self.setModal(True)
-        self.setWindowTitle('Vcode v0.1')
+        self.setWindowTitle('Vcode v0.2')
         self.setMinimumSize(250, 200)
         self.lay = QVBoxLayout()
 
         self.icon = QLabel(self)
-        self.icon.setPixmap(QPixmap('Vcode.ico').scaled(128, 128))
+        self.icon.setPixmap(QPixmap(resource_path('Vcode.ico')).scaled(128, 128))
         self.icon.resize(128, 128)
         self.lay.addWidget(self.icon, alignment=Qt.AlignmentFlag.AlignHCenter)
 
@@ -617,7 +657,7 @@ class AboutDialog(QDialog):
         self.name.setFont(QFont('Arial', 18))
         self.lay.addWidget(self.name, alignment=Qt.AlignmentFlag.AlignHCenter)
 
-        self.text = QLabel('Version: 0.1.0\n\nVladimir Varenik\nAll rights reserved', self)
+        self.text = QLabel('Version: 0.2.0\n\nVladimir Varenik\nAll rights reserved', self)
         self.lay.addWidget(self.text)
 
         self.setLayout(self.lay)
@@ -625,7 +665,10 @@ class AboutDialog(QDialog):
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
-    app.setWindowIcon(QIcon('Vcode.ico'))
+    app.setWindowIcon(QIcon(resource_path('Vcode.ico')))
     ide = IdeWindow()
     ide.show()
+    for arg in sys.argv[1:]:
+        if isfile(arg):
+            ide.add_tab(arg)
     sys.exit(app.exec())
