@@ -1,9 +1,4 @@
 {
-    "Highlight": {
-        "highlight": "highlights/highlight.hl",
-        "file_formats": ["hl"],
-        "start_command": ""
-    },
     "Python": {
         "highlight": "highlights/python.hl",
         "file_formats": ["py", "pyw", "pyi"],

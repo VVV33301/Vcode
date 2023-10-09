@@ -1,3 +1,4 @@
+class|def|for|while|if|elif|else|try|except|finally|with|match|case = {"tab": 1};
 (\w+)(?=\() = {"foreground": [136, 136, 198]};
 (#[^\n]*) = {"foreground": [127, 127, 127]};
 ^\s*@([\w.]+) = {"foreground": [127, 255, 127]};

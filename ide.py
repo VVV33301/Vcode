@@ -54,6 +54,7 @@ class Highlighter(QSyntaxHighlighter):
     def __init__(self, highlight_path: str, parent: QTextDocument = None):
         super().__init__(parent)
         self._mapping = {}
+        self.tab_words = []
         with open(highlight_path) as highlight_file:
             for string in highlight_file.read().replace('\n', '').split(';')[:-1]:
                 expression, parameters = string.rsplit(' = ', maxsplit=1)
@@ -75,6 +76,10 @@ class Highlighter(QSyntaxHighlighter):
                             text_char.setUnderlineColor(QColor(*params['underline_color']))
                         case 'underline_style':
                             text_char.setUnderlineStyle(QTextCharFormat.UnderlineStyle(int(params['underline_style'])))
+                        case 'tab':
+                            if params['tab'] == 1:
+                                for i in expression.split('|'):
+                                    self.tab_words.append(i)
                 self._mapping[rf'{expression}'] = text_char
 
     def highlightBlock(self, text: str) -> None:
@@ -231,12 +236,64 @@ class TreeViewMenu(QMenu):
                 pass
 
 
+class LineEditMenu(QMenu):
+    """Custom QLineEdit with new QMenu"""
+    def __init__(self, parent: QLineEdit, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        self.p: QLineEdit = parent
+
+        self.undo: QAction = QAction(self)
+        self.undo.triggered.connect(self.p.undo)
+        self.undo.setShortcut(QKeySequence.StandardKey.Undo)
+        self.addAction(self.undo)
+
+        self.redo: QAction = QAction(self)
+        self.redo.triggered.connect(self.p.redo)
+        self.redo.setShortcut(QKeySequence.StandardKey.Redo)
+        self.addAction(self.redo)
+
+        self.addSeparator()
+
+        self.cut: QAction = QAction(self)
+        self.cut.triggered.connect(self.p.cut)
+        self.cut.setShortcut(QKeySequence.StandardKey.Cut)
+        self.addAction(self.cut)
+
+        self.copy: QAction = QAction(self)
+        self.copy.triggered.connect(self.p.copy)
+        self.copy.setShortcut(QKeySequence.StandardKey.Copy)
+        self.addAction(self.copy)
+
+        self.paste: QAction = QAction(self)
+        self.paste.triggered.connect(self.p.paste)
+        self.paste.setShortcut(QKeySequence.StandardKey.Paste)
+        self.addAction(self.paste)
+
+        self.select_all: QAction = QAction(self)
+        self.select_all.triggered.connect(self.p.selectAll)
+        self.select_all.setShortcut(QKeySequence.StandardKey.SelectAll)
+        self.addAction(self.select_all)
+
+        self.lang_s = QSettings('Vcode', 'Settings')
+
+    def __call__(self, event: QContextMenuEvent) -> None:
+        """Call this class to get contect menu"""
+        lang: str = self.lang_s.value('language')
+        self.undo.setText(texts.undo[lang])
+        self.redo.setText(texts.redo[lang])
+        self.cut.setText(texts.cut[lang])
+        self.copy.setText(texts.copy[lang])
+        self.paste.setText(texts.paste[lang])
+        self.select_all.setText(texts.select_all[lang])
+        self.popup(event.globalPos())
+
+
 class EditorTab(QTextEdit):
     def __init__(self, file: str, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.enc_s = QSettings('Vcode', 'Settings')
         self.file: str = file.replace('\\', '/')
-        self.filename: str = file.split('/')[-1]
+        self.filename: str = file.replace('\\', '/').split('/')[-1]
         try:
             with open(file, encoding=self.enc_s.value('Encoding')) as cf:
                 self.setText(cf.read())
@@ -262,9 +319,15 @@ class EditorTab(QTextEdit):
         if e.key() == Qt.Key.Key_Tab:
             self.textCursor().insertText('    ')
             e.accept()
-        elif e.key() == Qt.Key.Key_Return and self.toPlainText()[self.textCursor().position() - 1] == ':':
-            self.textCursor().insertText('\n    ')
-            e.accept()
+        elif e.key() == Qt.Key.Key_Return:
+            for s in re.findall(r'\b\S+\b',
+                                self.toPlainText()[:self.textCursor().position()].rsplit('\n', maxsplit=1)[-1]):
+                if s in self.highlighter.tab_words:
+                    self.textCursor().insertText('\n    ')
+                    e.accept()
+                    break
+            else:
+                QTextEdit.keyPressEvent(self, e)
         else:
             QTextEdit.keyPressEvent(self, e)
 
@@ -283,6 +346,21 @@ class TabWidget(QTabWidget):
             self.empty_widget.setVisible(True)
         else:
             self.empty_widget.setVisible(False)
+
+
+class HighlightMakerString(QWidget):
+    def __init__(self, rstring, params):
+        super().__init__()
+        layout = QHBoxLayout()
+        self.setLayout(layout)
+        self.rstring = QLineEdit(rstring, self)
+        self.rstring.contextMenuEvent = LineEditMenu(self.rstring)
+        layout.addWidget(self.rstring)
+        self.json_params = QLineEdit(params[1:-1], self)
+        self.json_params.contextMenuEvent = LineEditMenu(self.json_params)
+        layout.addWidget(self.json_params)
+        self.remove_btn = QPushButton('-', self)
+        layout.addWidget(self.remove_btn)
 
 
 class IdeWindow(QMainWindow):
@@ -437,10 +515,9 @@ class IdeWindow(QMainWindow):
             return
         for tab in self.editor_tabs.findChildren(EditorTab):
             if tab.file == filename:
-                print(1)
                 self.editor_tabs.setCurrentWidget(tab)
                 return
-        editor: EditorTab = EditorTab(filename, self)
+        editor: EditorTab = EditorTab(filename.replace('\\', '/'), self)
         editor.textChanged.connect(self.auto_save)
         editor.setFont(self.settings.value('Font'))
         editor.contextMenuEvent = TextEditMenu(editor)
@@ -633,18 +710,29 @@ class SettingsDialog(QDialog):
         self.encoding.addItems(encodings)
         self.check_boxes_layout.addWidget(self.encoding)
 
+        self.highlight_maker = QListWidget(self)
+        for lang in language_list.keys():
+            self.highlight_maker.addItem(QListWidgetItem(lang, self.highlight_maker))
+        self.highlight_maker.clicked.connect(self.highlight_maker_call)
+        self.check_boxes_layout.addWidget(self.highlight_maker)
+
         self.m_lay: QGridLayout = QGridLayout(self)
         self.m_lay.addWidget(self.style_select_group, 0, 0, 1, 1)
         self.m_lay.addWidget(self.check_boxes_group, 0, 1, 1, 1)
         self.m_lay.addWidget(self.font_select_group, 1, 0, 1, 2)
         self.setLayout(self.m_lay)
 
+    def highlight_maker_call(self):
+        hlm = HighlightMaker(language_list[self.highlight_maker.currentItem().text()]['highlight'])
+        hlm.setWindowTitle(f'{self.highlight_maker.currentItem().text()} - Vcode highlight maker')
+        hlm.exec()
+
 
 class AboutDialog(QDialog):
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self.setModal(True)
-        self.setWindowTitle('Vcode v0.2')
+        self.setWindowTitle('Vcode v0.2.1')
         self.setMinimumSize(250, 200)
         self.lay = QVBoxLayout()
 
@@ -657,10 +745,40 @@ class AboutDialog(QDialog):
         self.name.setFont(QFont('Arial', 18))
         self.lay.addWidget(self.name, alignment=Qt.AlignmentFlag.AlignHCenter)
 
-        self.text = QLabel('Version: 0.2.0\n\nVladimir Varenik\nAll rights reserved', self)
+        self.text = QLabel('Version: 0.2.1\n\nVladimir Varenik\nAll rights reserved', self)
         self.lay.addWidget(self.text)
 
         self.setLayout(self.lay)
+
+
+class HighlightMaker(QDialog):
+    def __init__(self, highlighter, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        self.highlighter = highlighter
+        layout = QGridLayout(self)
+        self.layout_hl = QVBoxLayout()
+        self.setLayout(layout)
+        with open(highlighter) as hlf:
+            for i in hlf.read().split(';')[:-1]:
+                str_item = HighlightMakerString(i.split(' = ')[0], i.split(' = ')[-1])
+                str_item.remove_btn.clicked.connect(lambda: self.layout_hl.removeWidget(self.sender().parent()))
+                self.layout_hl.addWidget(str_item)
+        layout.addLayout(self.layout_hl, 0, 0, 1, 2)
+        self.lang_s = QSettings('Vcode', 'Settings')
+        self.add_btn = QPushButton(texts.add_btn[self.lang_s.value('Language')], self)
+        self.add_btn.clicked.connect(self.add_string)
+        layout.addWidget(self.add_btn, 1, 0, 1, 1)
+        self.save_btn = QPushButton(texts.save_btn[self.lang_s.value('Language')], self)
+        self.save_btn.clicked.connect(self.save_highlighter)
+        layout.addWidget(self.save_btn, 1, 1, 1, 1)
+
+    def add_string(self):
+        self.layout_hl.addWidget(HighlightMakerString('', '{}'))
+
+    def save_highlighter(self):
+        with open(self.highlighter, 'w') as hlf:
+            for i in self.findChildren(HighlightMakerString):
+                hlf.write(i.rstring.text() + ' = {' + i.json_params.text() + '};\n')
 
 
 if __name__ == '__main__':

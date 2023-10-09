@@ -13,6 +13,7 @@ about_btn = {'en': 'About program', 'ru': 'О программе', 'de': 'Über 
 feedback_btn = {'en': 'Feedback', 'ru': 'Обратная связь', 'de': 'Rückmeldung'}
 delete_btn = {'en': 'Delete', 'ru': 'Удалить', 'de': 'Löschen'}
 rename_btn = {'en': 'Rename', 'ru': 'Переименовать', 'de': 'Umbenennen'}
+add_btn = {'en': 'Add', 'ru': 'Добавить', 'de': 'Hinzufügen'}
 
 autorun = {'en': 'Autorun', 'ru': 'Автозагрузка', 'de': 'Automatisch laden'}
 autosave = {'en': 'Autosave', 'ru': 'Автосохранение', 'de': 'Automatisches Speichern'}
