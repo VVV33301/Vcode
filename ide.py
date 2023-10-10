@@ -22,6 +22,23 @@ def resource_path(relative_path):
     return join(base_path, relative_path)
 
 
+def set_autorun(enabled: bool) -> None:
+    key: HKEYType = OpenKey(HKEY_CURRENT_USER, 'SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run',
+                            0, KEY_ALL_ACCESS)
+    if enabled:
+        SetValueEx(key, 'Vcode', 0, REG_SZ, sys.argv[0])
+    else:
+        DeleteValue(key, 'Vcode')
+    key.Close()
+
+
+def update_filters() -> list[str]:
+    filters_f: list = ['All Files (*.*)']
+    for i, j in language_list.items():
+        filters_f.append(f'{i} Files (*.{" *.".join(j["file_formats"])})')
+    return filters_f
+
+
 encodings = ['ascii', 'big5', 'big5hkscs', 'cp037', 'cp1006', 'cp1026', 'cp1125', 'cp1140', 'cp1250', 'cp1251',
              'cp1252', 'cp1253', 'cp1254', 'cp1255', 'cp1256', 'cp1257', 'cp1258', 'cp273', 'cp424', 'cp437', 'cp500',
              'cp720', 'cp737', 'cp775', 'cp850', 'cp852', 'cp855', 'cp856', 'cp857', 'cp858', 'cp860', 'cp861', 'cp862',
@@ -35,19 +52,6 @@ encodings = ['ascii', 'big5', 'big5hkscs', 'cp037', 'cp1006', 'cp1026', 'cp1125'
              'utf-16-be', 'utf-16-le', 'utf-32', 'utf-32-be', 'utf-32-le', 'utf-7', 'utf-8', 'utf-8-sig']
 with open(resource_path('languages.json')) as llf:
     language_list: dict = json.load(llf)
-filters: list = ['All Files (*.*)']
-for i, j in language_list.items():
-    filters.append(f'{i} Files (*.{" *.".join(j["file_formats"])})')
-
-
-def set_autorun(enabled: bool) -> None:
-    key: HKEYType = OpenKey(HKEY_CURRENT_USER, 'SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run',
-                            0, KEY_ALL_ACCESS)
-    if enabled:
-        SetValueEx(key, 'Vcode', 0, REG_SZ, sys.argv[0])
-    else:
-        DeleteValue(key, 'Vcode')
-    key.Close()
 
 
 class Highlighter(QSyntaxHighlighter):
@@ -629,13 +633,13 @@ class IdeWindow(QMainWindow):
 
     def new_file(self):
         file, _ = QFileDialog.getSaveFileName(directory=os.path.expanduser('~') + '/untitled',
-                                              filter=';;'.join(filters))
+                                              filter=';;'.join(update_filters()))
         if file:
             open(file, 'w', encoding=self.settings.value('Encoding')).close()
             self.add_tab(file)
 
     def open_file(self):
-        file, _ = QFileDialog.getOpenFileName(directory=os.path.expanduser('~'), filter=';;'.join(filters))
+        file, _ = QFileDialog.getOpenFileName(directory=os.path.expanduser('~'), filter=';;'.join(update_filters()))
         if file:
             self.add_tab(file)
 
@@ -643,7 +647,7 @@ class IdeWindow(QMainWindow):
         if self.editor_tabs.count():
             path, _ = QFileDialog.getSaveFileName(
                 directory=os.path.expanduser('~') + '/' + self.editor_tabs.currentWidget().filename,
-                filter=';;'.join(filters))
+                filter=';;'.join(update_filters()))
             if path:
                 with open(path, 'w') as sf:
                     sf.write(self.editor_tabs.currentWidget().toPlainText())
@@ -762,6 +766,9 @@ class LanguageSettingsDialog(QDialog):
         self.highlight = QLineEdit(language_list[self.language]['highlight'], self)
         self.file_formats = QLineEdit(' '.join(language_list[self.language]['file_formats']), self)
         self.start_command = QLineEdit(language_list[self.language]['start_command'], self)
+        self.highlight.contextMenuEvent = LineEditMenu(self.highlight)
+        self.file_formats.contextMenuEvent = LineEditMenu(self.file_formats)
+        self.start_command.contextMenuEvent = LineEditMenu(self.start_command)
         layout.addWidget(self.highlight, 0, 0, 1, 2)
         layout.addWidget(self.file_formats, 1, 0, 1, 2)
         layout.addWidget(self.start_command, 2, 0, 1, 2)
@@ -822,6 +829,7 @@ if __name__ == '__main__':
     app.setWindowIcon(QIcon(resource_path('Vcode.ico')))
     ide = IdeWindow()
     ide.show()
+    ide.settings_window.autorun.setEnabled(False)
     for arg in sys.argv[1:]:
         if isfile(arg):
             if not arg.endswith('.hl'):
