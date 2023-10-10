@@ -710,29 +710,29 @@ class SettingsDialog(QDialog):
         self.encoding.addItems(encodings)
         self.check_boxes_layout.addWidget(self.encoding)
 
-        self.highlight_maker = QListWidget(self)
+        self.languages_list = QListWidget(self)
         for lang in language_list.keys():
-            self.highlight_maker.addItem(QListWidgetItem(lang, self.highlight_maker))
-        self.highlight_maker.clicked.connect(self.highlight_maker_call)
-        self.check_boxes_layout.addWidget(self.highlight_maker)
+            self.languages_list.addItem(QListWidgetItem(lang, self.languages_list))
+        self.languages_list.clicked.connect(self.language_settings)
 
         self.m_lay: QGridLayout = QGridLayout(self)
         self.m_lay.addWidget(self.style_select_group, 0, 0, 1, 1)
         self.m_lay.addWidget(self.check_boxes_group, 0, 1, 1, 1)
-        self.m_lay.addWidget(self.font_select_group, 1, 0, 1, 2)
+        self.m_lay.addWidget(self.font_select_group, 1, 0, 1, 3)
+        self.m_lay.addWidget(self.languages_list, 0, 2, 1, 1)
         self.setLayout(self.m_lay)
 
-    def highlight_maker_call(self):
-        hlm = HighlightMaker(language_list[self.highlight_maker.currentItem().text()]['highlight'])
-        hlm.setWindowTitle(f'{self.highlight_maker.currentItem().text()} - Vcode highlight maker')
-        hlm.exec()
+    def language_settings(self):
+        lsd = LanguageSettingsDialog(self.languages_list.currentItem().text())
+        lsd.setWindowTitle(f'{self.languages_list.currentItem().text()} - Vcode languages')
+        lsd.exec()
 
 
 class AboutDialog(QDialog):
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self.setModal(True)
-        self.setWindowTitle('Vcode v0.2.1')
+        self.setWindowTitle('Vcode v0.3')
         self.setMinimumSize(250, 200)
         self.lay = QVBoxLayout()
 
@@ -745,10 +745,46 @@ class AboutDialog(QDialog):
         self.name.setFont(QFont('Arial', 18))
         self.lay.addWidget(self.name, alignment=Qt.AlignmentFlag.AlignHCenter)
 
-        self.text = QLabel('Version: 0.2.1\n\nVladimir Varenik\nAll rights reserved', self)
+        self.text = QLabel('Version: 0.3.0\n\nVladimir Varenik\nAll rights reserved', self)
         self.lay.addWidget(self.text)
 
         self.setLayout(self.lay)
+
+
+class LanguageSettingsDialog(QDialog):
+    def __init__(self, language, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        self.language = language
+        layout = QGridLayout(self)
+        self.setLayout(layout)
+        self.lang_s = QSettings('Vcode', 'Settings')
+
+        self.highlight = QLineEdit(language_list[self.language]['highlight'], self)
+        self.file_formats = QLineEdit(' '.join(language_list[self.language]['file_formats']), self)
+        self.start_command = QLineEdit(language_list[self.language]['start_command'], self)
+        layout.addWidget(self.highlight, 0, 0, 1, 2)
+        layout.addWidget(self.file_formats, 1, 0, 1, 2)
+        layout.addWidget(self.start_command, 2, 0, 1, 2)
+
+        self.edit_highlight_btn = QPushButton(texts.edit_highlight_btn[self.lang_s.value('Language')], self)
+        self.edit_highlight_btn.clicked.connect(self.highlight_maker_call)
+        layout.addWidget(self.edit_highlight_btn, 3, 0, 1, 1)
+
+        self.save_btn = QPushButton(texts.save_btn[self.lang_s.value('Language')], self)
+        self.save_btn.clicked.connect(self.save_language)
+        layout.addWidget(self.save_btn, 3, 1, 1, 1)
+
+    def highlight_maker_call(self):
+        hlm = HighlightMaker(language_list[self.language]['highlight'])
+        hlm.setWindowTitle(f'{language_list[self.language]["highlight"].split("/")[-1]} - Vcode highlight maker')
+        hlm.exec()
+
+    def save_language(self):
+        language_list[self.language] = {'highlight': self.highlight.text(),
+                                        'file_formats': [f for f in self.file_formats.text().split()],
+                                        'start_command': self.start_command.text()}
+        with open(resource_path('languages.json'), 'w') as llfw:
+            json.dump(language_list, llfw)
 
 
 class HighlightMaker(QDialog):
@@ -788,5 +824,10 @@ if __name__ == '__main__':
     ide.show()
     for arg in sys.argv[1:]:
         if isfile(arg):
-            ide.add_tab(arg)
+            if not arg.endswith('.hl'):
+                ide.add_tab(arg)
+            else:
+                hm = HighlightMaker(arg)
+                hm.setWindowTitle(f'{arg} - Vcode highlight maker')
+                hm.exec()
     sys.exit(app.exec())
