@@ -27,6 +27,9 @@ cut = {'en': 'Cut', 'ru': 'Вырезать', 'de': 'Ausschneiden'}
 copy = {'en': 'Copy', 'ru': 'Копировать', 'de': 'Kopieren'}
 paste = {'en': 'Paste', 'ru': 'Вставить', 'de': 'Einfügen'}
 select_all = {'en': 'Select all', 'ru': 'Выбрать всё', 'de': 'Alles auswählen'}
+search = {'en': 'Search in', 'ru': 'Искать в', 'de': 'Suchen in'}
+search_in_g = {'en': 'Search in Google', 'ru': 'Искать в Google', 'de': 'Suchen in Google'}
+search_in_so = {'en': 'Search in Stack Overflow', 'ru': 'Искать на Stack Overflow', 'de': 'Suchen in Stack Overflow'}
 
 save_warning = {'en': 'Do you want to save changes?', 'ru': 'Вы хотите сохранить изменения?',
                 'de': 'Möchten Sie Änderungen speichern?'}

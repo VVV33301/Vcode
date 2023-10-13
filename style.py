@@ -14,24 +14,37 @@ STYLE = {
             color: white;
         }
         QMenuBar::item:selected, QMenu:selected {
-            background-color: rgb(115, 115, 125);
-            color: rgb(10, 5, 0);
+            background-color: rgb(105, 105, 115);
+            color: rgb(245, 245, 245);
         }
         QTabBar {
             background-color: rgb(30, 30, 60);
             color: black;
         }
-        QTabWidget {
-            background-color: rgb(30, 30, 60);
-        }
         QLabel, QRadioButton, QCheckBox {
             color: white;
         }
-        QGroupBox {
-            padding-top: 21px;
+        QListView {
             color: white;
-            border-radius: 12px; 
-            background-color: rgb(60, 60, 90);
+            border-radius: 6px;
+            border-width: 2px;
+            border-color: rgb(60, 60, 90);
+            border-style: solid;
+            height: 6em;
+        }
+        QTreeView::item:hover, QListView::item:hover {
+            background-color: rgb(54, 54, 60);
+        }
+        QTreeView::item:selected, QListView::item:selected {
+            background-color: rgb(45, 45, 54);
+        }
+        QGroupBox {
+            padding-top: 18px;
+            color: white;
+            border-radius: 12px;
+            border-width: 2px;
+            border-color: rgb(60, 60, 90);
+            border-style: solid;
             width: 6em;
         }
         QComboBox, QComboBox::drop-down {
@@ -45,59 +58,73 @@ STYLE = {
         }
         QComboBox QAbstractItemView::item:hover, QComboBox QAbstractItemView::item:selected {
             background-color: rgb(45, 45, 54);
+        }
+        QPushButton {
+            color: white;
+            border-radius: 6px;
+            border-width: 2px;
+            border-color: rgb(60, 60, 90);
+            border-style: solid;
+            background-color: rgb(65, 65, 75);
+            height: 1.8em;
+            width: 4.2em;
+        }
+        QAbstractButton:hover {
+            background-color: rgb(90, 90, 100);
         }
         QLabel#exit_code {
             font-size: 18px;
         }
         ''',
-    'White':
+    'Yellow':
         '''
         QMainWindow {
             background-color: rgb(245, 245, 215);
-            min-width: 1000px;
-            min-height: 700px;
+        }
+        QDialog, QWidget {
+            background-color: rgb(255, 255, 245);
         } 
-        QDialog {
+        QMenuBar, QMenu, QToolBar {
             background-color: rgb(245, 245, 215);
-        } 
-        QMenuBar, QMenu {
-            background-color: rgb(115, 115, 125);
-            color: white;
         }
         QMenuBar::item:selected, QMenu:selected {
-            background-color: rgb(115, 115, 125);
-            color: rgb(10, 5, 0);
+            background-color: rgb(215, 215, 195);
+            color: rgb(245, 245, 245);
         }
         QTabBar {
             background-color: rgb(30, 30, 60);
+            color: black;
         }
-        QTabWidget {
-            background-color: rgb(30, 30, 60);
+        QListView {
+            border-radius: 6px;
+            border-width: 2px;
+            border-color: rgb(60, 60, 90);
+            border-style: solid;
+            height: 6em;
         }
-        QLabel, QRadioButton, QCheckBox {
-            color: white;
+        QTreeView::item:hover, QListView::item:hover {
+            background-color: rgb(184, 184, 190);
+        }
+        QTreeView::item:selected, QListView::item:selected {
+            background-color: rgb(175, 175, 184);
         }
         QGroupBox {
-            padding-top: 21px;
-            color: white;
-            border-radius: 12px; 
-            background-color: rgb(60, 60, 90);
+            padding-top: 18px;
+            border-radius: 12px;
+            border-width: 2px;
+            border-color: rgb(60, 60, 90);
+            border-style: solid;
             width: 6em;
         }
         QComboBox, QComboBox::drop-down {
-            color: white;
             border-radius: 6px; 
-            background-color: rgb(60, 60, 90);
+            background-color: rgb(190, 190, 160);
         }
         QComboBox QAbstractItemView {
-            background-color: rgb(90, 90, 120);
-            color: white;
+            background-color: rgb(220, 220, 190);
         }
         QComboBox QAbstractItemView::item:hover, QComboBox QAbstractItemView::item:selected {
-            background-color: rgb(45, 45, 54);
-        }
-        QToolBar {
-            color: white; 
+            background-color: rgb(185, 185, 174);
         }
         QLabel#exit_code {
             font-size: 18px;
