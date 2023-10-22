@@ -5,7 +5,6 @@ import threading
 import re
 import json
 import shutil
-from winreg import HKEYType, HKEY_CURRENT_USER, KEY_ALL_ACCESS, REG_SZ, OpenKey, SetValueEx, DeleteValue
 from webbrowser import open as openweb
 from os.path import isfile, isdir, dirname, abspath, join
 
@@ -22,13 +21,15 @@ def resource_path(relative_path) -> join:
 
 
 def set_autorun(enabled: bool) -> None:
-    key: HKEYType = OpenKey(HKEY_CURRENT_USER, 'SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run',
-                            0, KEY_ALL_ACCESS)
-    if enabled:
-        SetValueEx(key, 'Vcode', 0, REG_SZ, sys.argv[0])
-    else:
-        DeleteValue(key, 'Vcode')
-    key.Close()
+    if sys.platform == 'win32':
+        from winreg import HKEYType, HKEY_CURRENT_USER, KEY_ALL_ACCESS, REG_SZ, OpenKey, SetValueEx, DeleteValue
+        key: HKEYType = OpenKey(HKEY_CURRENT_USER, 'SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run',
+                                0, KEY_ALL_ACCESS)
+        if enabled:
+            SetValueEx(key, 'Vcode', 0, REG_SZ, sys.argv[0])
+        else:
+            DeleteValue(key, 'Vcode')
+        key.Close()
 
 
 def update_filters() -> list[str]:
@@ -58,7 +59,7 @@ with open(resource_path('languages.json')) as llf:
 class Highlighter(QSyntaxHighlighter):
     def __init__(self, highlight_path: str, parent: QTextDocument = None) -> None:
         super().__init__(parent)
-        self._mapping: dict[str, QTextCharFormat] = {}
+        self.mapping: dict[str, QTextCharFormat] = {}
         self.tab_words: list[str] = []
         with open(highlight_path) as highlight_file:
             for string in highlight_file.read().replace('\n', '').split(';')[:-1]:
@@ -85,10 +86,10 @@ class Highlighter(QSyntaxHighlighter):
                             if params['tab'] == 1:
                                 for i in expression.split('|'):
                                     self.tab_words.append(i)
-                self._mapping[rf'{expression}']: QTextCharFormat = text_char
+                self.mapping[rf'{expression}']: QTextCharFormat = text_char
 
     def highlightBlock(self, text: str) -> None:
-        for pattern, char in self._mapping.items():
+        for pattern, char in self.mapping.items():
             for match in re.finditer(pattern, text):
                 s, e = match.span()
                 self.setFormat(s, e - s, char)
@@ -204,7 +205,7 @@ class TreeViewMenu(QMenu):
         self.rename_btn.triggered.connect(self.rename_file)
         self.addAction(self.rename_btn)
 
-        self.lang_s = QSettings('Vcode', 'Settings')
+        self.lang_s: QSettings = QSettings('Vcode', 'Settings')
 
     def __call__(self, event: QContextMenuEvent) -> None:
         lang: str = self.lang_s.value('Language')
@@ -228,7 +229,7 @@ class TreeViewMenu(QMenu):
 
     def copy_file(self) -> None:
         n: str = self.c.model.filePath(self.c.tree.selectedIndexes()[0])
-        if isfile(n) or isdir(n):
+        if (isfile(n) or isdir(n)) and sys.platform == 'win32':
             os.system(f'powershell -command "Set-Clipboard -Path "{n}""')
 
     def paste_file(self) -> None:
@@ -298,7 +299,7 @@ class LineEditMenu(QMenu):
         self.select_all.setShortcut(QKeySequence.StandardKey.SelectAll)
         self.addAction(self.select_all)
 
-        self.lang_s = QSettings('Vcode', 'Settings')
+        self.lang_s: QSettings = QSettings('Vcode', 'Settings')
 
     def __call__(self, event: QContextMenuEvent) -> None:
         """Call this class to get contect menu"""
@@ -342,18 +343,65 @@ class EditorTab(QTextEdit):
         self.saved_text: str = self.toPlainText()
 
     def keyPressEvent(self, e: QKeyEvent) -> None:
+        txt_: str = self.toPlainText()
         if e.key() == Qt.Key.Key_Tab:
-            self.textCursor().insertText('    ')
+            self.textCursor().insertText('    ' + '\n    '.join(
+                self.textCursor().selection().toPlainText().split('\n')))
             e.accept()
         elif e.key() == Qt.Key.Key_Return:
-            for s in re.findall(r'\b\S+\b',
-                                self.toPlainText()[:self.textCursor().position()].rsplit('\n', maxsplit=1)[-1]):
+            txt_1: str = txt_[:self.textCursor().position()].rsplit('\n', maxsplit=1)[-1]
+            self.textCursor().insertText('\n' + re.split(r'\S', txt_1, 1)[0])
+            if self.textCursor().position() <= len(txt_) and txt_1:
+                if txt_1[-1] == '(' and txt_[self.textCursor().position() - 1] == ')' or \
+                        txt_1[-1] == '[' and txt_[self.textCursor().position() - 1] == ']' or \
+                        txt_1[-1] == '{' and txt_[self.textCursor().position() - 1] == '}' or \
+                        txt_1[-1] == '<' and txt_[self.textCursor().position() - 1] == '>':
+                    self.textCursor().insertText('    \n')
+            for s in re.findall(r'\b\S+\b', txt_1):
                 if s in self.highlighter.tab_words:
-                    self.textCursor().insertText('\n    ')
-                    e.accept()
+                    self.textCursor().insertText('    ')
                     break
-            else:
-                QTextEdit.keyPressEvent(self, e)
+            e.accept()
+        elif e.key() == Qt.Key.Key_ParenLeft:
+            self.textCursor().insertText(f'({self.textCursor().selection().toPlainText()})')
+            cursor: QTextCursor = self.textCursor()
+            cursor.movePosition(QTextCursor.MoveOperation.Left)
+            self.setTextCursor(cursor)
+            e.accept()
+        elif e.key() == Qt.Key.Key_BracketLeft:
+            self.textCursor().insertText(f'[{self.textCursor().selection().toPlainText()}]')
+            cursor: QTextCursor = self.textCursor()
+            cursor.movePosition(QTextCursor.MoveOperation.Left)
+            self.setTextCursor(cursor)
+            e.accept()
+        elif e.key() == Qt.Key.Key_BraceLeft:
+            self.textCursor().insertText(f'{{{self.textCursor().selection().toPlainText()}}}')
+            cursor: QTextCursor = self.textCursor()
+            cursor.movePosition(QTextCursor.MoveOperation.Left)
+            self.setTextCursor(cursor)
+            e.accept()
+        elif e.key() == Qt.Key.Key_Less and self.textCursor().selectedText():
+            self.textCursor().insertText(f'<{self.textCursor().selection().toPlainText()}>')
+            cursor: QTextCursor = self.textCursor()
+            cursor.movePosition(QTextCursor.MoveOperation.Left)
+            self.setTextCursor(cursor)
+            e.accept()
+        elif e.key() == Qt.Key.Key_Apostrophe and (self.textCursor().selectedText() or
+                                                   self.textCursor().position() == len(txt_) or
+                                                   txt_[self.textCursor().position()] in ' \n'):
+            self.textCursor().insertText(f'\'{self.textCursor().selection().toPlainText()}\'')
+            cursor: QTextCursor = self.textCursor()
+            cursor.movePosition(QTextCursor.MoveOperation.Left)
+            self.setTextCursor(cursor)
+            e.accept()
+        elif e.key() == Qt.Key.Key_QuoteDbl and (self.textCursor().selectedText() or
+                                                 self.textCursor().position() == len(txt_) or
+                                                 txt_[self.textCursor().position()] in ' \n'):
+            self.textCursor().insertText(f'"{self.textCursor().selection().toPlainText()}"')
+            cursor: QTextCursor = self.textCursor()
+            cursor.movePosition(QTextCursor.MoveOperation.Left)
+            self.setTextCursor(cursor)
+            e.accept()
         else:
             QTextEdit.keyPressEvent(self, e)
 
@@ -402,7 +450,8 @@ class IdeWindow(QMainWindow):
     def __init__(self) -> None:
         super().__init__()
         self.setWindowTitle('Vcode')
-        self.setMinimumSize(1000, 700)
+        self.setMinimumSize(300, 100)
+        self.resize(1000, 700)
 
         self.process: subprocess.Popen | None = None
 
@@ -420,6 +469,7 @@ class IdeWindow(QMainWindow):
 
         self.editor_tabs: TabWidget = TabWidget(self)
         self.editor_tabs.setTabsClosable(True)
+        self.editor_tabs.setMovable(True)
         self.editor_tabs.tabCloseRequested.connect(self.close_tab)
         self.editor_tabs.currentChanged.connect(self.sel_tab)
         self.editor_tabs.empty_widget.clicked.connect(self.open_file)
@@ -439,7 +489,7 @@ class IdeWindow(QMainWindow):
         self.splitter: QSplitter = QSplitter()
         self.splitter.addWidget(self.tree)
         self.splitter.addWidget(self.editor_tabs)
-        self.splitter.setSizes([150, 500])
+        self.splitter.setSizes([225, 775])
         self.setCentralWidget(self.splitter)
 
         self.tool_bar: QToolBar = QToolBar(self)
@@ -452,13 +502,22 @@ class IdeWindow(QMainWindow):
         self.tool_bar.addAction(self.start_btn)
 
         self.terminal_btn: QAction = QAction(self)
-        self.terminal_btn.triggered.connect(lambda: os.system('start "Vcode terminal" powershell'))
+        self.terminal_btn.triggered.connect(self.start_terminal)
         self.tool_bar.addAction(self.terminal_btn)
 
         self.tool_bar.addSeparator()
         self.exit_code: QLabel = QLabel('-')
         self.exit_code.setObjectName('exit_code')
         self.tool_bar.addWidget(self.exit_code)
+
+        empty: QWidget = QWidget()
+        empty.setObjectName('empty')
+        empty.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self.tool_bar.addWidget(empty)
+
+        self.position_code: QLabel = QLabel('0:0')
+        self.position_code.setObjectName('exit_code')
+        self.tool_bar.addWidget(self.position_code)
 
         self.file_menu: QMenu = QMenu(self)
         self.menuBar().addMenu(self.file_menu)
@@ -486,6 +545,21 @@ class IdeWindow(QMainWindow):
         self.settings_btn: QAction = QAction(self)
         self.settings_btn.triggered.connect(self.settings_window.exec)
         self.menuBar().addAction(self.settings_btn)
+
+        self.git_menu: QMenu = QMenu('Git', self)
+        self.menuBar().addMenu(self.git_menu)
+
+        self.git_init_btn: QAction = QAction('Init', self)
+        self.git_init_btn.triggered.connect(self.git_init)
+        self.git_menu.addAction(self.git_init_btn)
+
+        self.git_commit_btn: QAction = QAction('Commit', self)
+        self.git_commit_btn.triggered.connect(self.git_commit)
+        self.git_menu.addAction(self.git_commit_btn)
+
+        self.git_clone_btn: QAction = QAction('Clone', self)
+        self.git_clone_btn.triggered.connect(self.git_clone)
+        self.git_menu.addAction(self.git_clone_btn)
 
         self.about_menu: QMenu = QMenu(self)
         self.menuBar().addMenu(self.about_menu)
@@ -558,6 +632,8 @@ class IdeWindow(QMainWindow):
         editor.textChanged.connect(self.auto_save)
         editor.setFont(self.settings.value('Font'))
         editor.contextMenuEvent = TextEditMenu(editor)
+        editor.cursorPositionChanged.connect(lambda: self.position_code.setText('{}:{}'.format(
+            editor.textCursor().blockNumber() + 1, editor.textCursor().positionInBlock() + 1)))
         for langname, language in language_list.items():
             if filename.rsplit('.', maxsplit=1)[-1] in language['file_formats']:
                 editor.setHighlighter(Highlighter(resource_path(language['highlight'])))
@@ -568,7 +644,7 @@ class IdeWindow(QMainWindow):
     def close_tab(self, tab) -> None:
         widget: EditorTab = self.editor_tabs.widget(tab)
         if widget.saved_text != widget.toPlainText():
-            button: QMessageBox = QMessageBox.warning(
+            button: QMessageBox.StandardButton = QMessageBox.warning(
                 self, 'Warning', texts.save_warning[self.settings.value('Language')],
                 buttons=QMessageBox.StandardButton.Save | QMessageBox.StandardButton.Discard |
                         QMessageBox.StandardButton.Cancel,
@@ -618,6 +694,14 @@ class IdeWindow(QMainWindow):
         self.settings.setValue('Autorun', int(self.settings_window.autorun.isChecked()))
         set_autorun(self.settings_window.autorun.isChecked())
 
+    def start_terminal(self):
+        if sys.platform == 'win32':
+            os.system('start "Vcode terminal" powershell')
+        elif sys.platform.startswith('linux'):
+            os.system('gnome-terminal')
+        else:
+            self.exit_code.setText('Can`t start terminal')
+
     def start_program(self) -> None:
         if self.editor_tabs.count():
             if self.process:
@@ -626,7 +710,7 @@ class IdeWindow(QMainWindow):
                 return
             if not self.settings.value('Autosave') and \
                     self.editor_tabs.currentWidget().saved_text != self.editor_tabs.currentWidget().toPlainText():
-                button: QMessageBox = QMessageBox.warning(
+                button: QMessageBox.StandardButton = QMessageBox.warning(
                     self, 'Warning', texts.save_warning[self.settings.value('Language')],
                     buttons=QMessageBox.StandardButton.Save | QMessageBox.StandardButton.Cancel,
                     defaultButton=QMessageBox.StandardButton.Save)
@@ -639,23 +723,42 @@ class IdeWindow(QMainWindow):
     def program(self) -> None:
         code: EditorTab = self.editor_tabs.currentWidget()
         if code.language in language_list.keys():
-            with open('process.bat', 'w') as bat:
-                bat.write(f'''
-                @echo off
-                {code.start_command.format(filename=code.file)}
-                echo Exit code: %errorlevel%
-                pause
-                echo %errorlevel% > process.bat
-                ''')
-            self.process = subprocess.Popen('process.bat', creationflags=subprocess.CREATE_NEW_CONSOLE,
-                                            process_group=subprocess.CREATE_NEW_PROCESS_GROUP)
-            self.process.wait()
-            with open('process.bat') as bat:
+            com: str = code.file
+            if sys.platform == 'win32':
+                with open('process.bat', 'w', encoding='utf-8') as bat:
+                    bat.write(f'''
+                              @echo off
+                              {code.start_command.format(filename=com)}
+                              echo Exit code: %errorlevel%
+                              pause
+                              echo %errorlevel% > {com}.output
+                              ''')
+                self.process = subprocess.Popen('process.bat', creationflags=subprocess.CREATE_NEW_CONSOLE,
+                                                process_group=subprocess.CREATE_NEW_PROCESS_GROUP)
+                self.process.wait()
+                os.remove('process.bat')
+            elif sys.platform.startswith('linux'):
+                with open('process.sh', 'w', encoding='utf-8') as bat:
+                    bat.write(f'''
+                              #!/bin/bash
+                              {code.start_command.format(filename=com)}
+                              echo "Exit code: $?"
+                              read -p "Press enter to continue..."
+                              echo $? > {com}.output
+                              ''')
+                self.process = subprocess.Popen('process.sh', creationflags=subprocess.CREATE_NEW_CONSOLE,
+                                                process_group=subprocess.CREATE_NEW_PROCESS_GROUP)
+                self.process.wait()
+                os.remove('process.sh')
+            else:
+                self.process = subprocess.Popen('pwd', creationflags=subprocess.CREATE_NEW_CONSOLE,
+                                                process_group=subprocess.CREATE_NEW_PROCESS_GROUP)
+            with open(f'{com}.output') as bat:
                 if len(x := bat.readlines()) == 1:
                     self.exit_code.setText(f'Exit code: {x[0].rstrip()}')
                 else:
                     self.exit_code.setText('Interrupted')
-            os.remove('process.bat')
+            os.remove(f'{com}.output')
             self.process = None
         else:
             self.exit_code.setText(f'Can`t start "{code.filename}"')
@@ -690,10 +793,60 @@ class IdeWindow(QMainWindow):
             self.editor_tabs.currentWidget().saved_text = self.editor_tabs.currentWidget().toPlainText()
             self.editor_tabs.currentWidget().save()
 
+    def git_check(self):
+        try:
+            subprocess.run('git -v')
+            return True
+        except FileNotFoundError:
+            self.exit_code.setText('Git not installed')
+            return False
+
+    def git_init(self):
+        if self.git_check():
+            path: str = QFileDialog.getExistingDirectory(directory=os.path.expanduser('~'))
+            if path:
+                p: subprocess.Popen = subprocess.Popen(f'git init {path}',
+                                                       stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+                p.wait()
+                if p.returncode:
+                    self.exit_code.setText(p.stdout.read().decode(sys.stdin.encoding).strip())
+                else:
+                    self.exit_code.setText(f'Initialize repository {path}')
+
+    def git_commit(self):
+        if self.git_check():
+            git_descr: QInputDialog = QInputDialog(self)
+            git_descr.exec()
+            if git_descr.textValue():
+                path: str = QFileDialog.getExistingDirectory(directory=os.path.expanduser('~'))
+                if path:
+                    p: subprocess.Popen = subprocess.Popen(f'git commit -m "{git_descr.textValue()}" {path}',
+                                                           stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+                    p.wait()
+                    if p.returncode:
+                        self.exit_code.setText(p.stdout.read().decode(sys.stdin.encoding).strip())
+                    else:
+                        self.exit_code.setText(f'Commit repository {path}')
+
+    def git_clone(self):
+        if self.git_check():
+            git_file: QInputDialog = QInputDialog(self)
+            git_file.exec()
+            if git_file.textValue():
+                path: str = QFileDialog.getExistingDirectory(directory=os.path.expanduser('~'))
+                if path:
+                    p: subprocess.Popen = subprocess.Popen(f'git clone {git_file.textValue()} {path}',
+                                                           stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+                    p.wait()
+                    if p.returncode:
+                        self.exit_code.setText(p.stdout.read().decode(sys.stdin.encoding).strip())
+                    else:
+                        self.exit_code.setText(f'Clone repository {git_file.textValue()}')
+
     def closeEvent(self, a0: QCloseEvent) -> None:
         for tab in self.editor_tabs.findChildren(EditorTab):
             if tab.saved_text != tab.toPlainText():
-                button: QMessageBox = QMessageBox.warning(
+                button: QMessageBox.StandardButton = QMessageBox.warning(
                     self, 'Warning', texts.save_warning[self.settings.value('Language')],
                     buttons=QMessageBox.StandardButton.Save | QMessageBox.StandardButton.Discard |
                             QMessageBox.StandardButton.Cancel,
@@ -753,6 +906,7 @@ class SettingsDialog(QDialog):
         self.check_boxes_layout.addWidget(self.encoding)
 
         self.languages_list: QListWidget = QListWidget(self)
+        self.languages_list.contextMenuEvent = self.languages_context_menu
         for lang in language_list.keys():
             self.languages_list.addItem(QListWidgetItem(lang, self.languages_list))
         self.languages_list.clicked.connect(self.language_settings)
@@ -764,10 +918,43 @@ class SettingsDialog(QDialog):
         self.m_lay.addWidget(self.languages_list, 0, 2, 1, 1)
         self.setLayout(self.m_lay)
 
+        self.remove_btn: QAction = QAction(self)
+        self.remove_btn.triggered.connect(self.remove_language)
+
+        self.add_btn: QAction = QAction(self)
+        self.add_btn.triggered.connect(self.add_language)
+
     def language_settings(self) -> None:
         lsd: LanguageSettingsDialog = LanguageSettingsDialog(self.languages_list.currentItem().text())
         lsd.setWindowTitle(f'{self.languages_list.currentItem().text()} - Vcode languages')
         lsd.exec()
+
+    def languages_context_menu(self, event: QContextMenuEvent) -> None:
+        menu: QMenu = QMenu(self)
+        item: QListWidgetItem = self.languages_list.itemAt(event.pos())
+        if item:
+            self.remove_btn.setText(texts.remove_btn[QSettings('Vcode', 'Settings').value('Language')])
+            menu.addAction(self.remove_btn)
+        else:
+            self.add_btn.setText(texts.add_btn[QSettings('Vcode', 'Settings').value('Language')])
+            menu.addAction(self.add_btn)
+        menu.popup(event.globalPos())
+
+    def remove_language(self) -> None:
+        name = self.languages_list.selectedItems()[0]
+        del language_list[name.text()]
+        with open(resource_path('languages.json'), 'w') as llfw:
+            json.dump(language_list, llfw)
+        self.languages_list.takeItem(self.languages_list.row(name))
+
+    def add_language(self) -> None:
+        name: QInputDialog = QInputDialog(self)
+        name.exec()
+        if name.textValue():
+            language_list[name.textValue()] = {"highlight": "", "file_formats": [], "start_command": ""}
+            with open(resource_path('languages.json'), 'w') as llfw:
+                json.dump(language_list, llfw)
+        self.languages_list.addItem(QListWidgetItem(name.textValue(), self.languages_list))
 
 
 class AboutDialog(QDialog):
@@ -776,7 +963,7 @@ class AboutDialog(QDialog):
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self.setModal(True)
-        self.setWindowTitle('Vcode v0.3')
+        self.setWindowTitle('Vcode v0.4')
         self.setMinimumSize(250, 200)
         self.lay: QVBoxLayout = QVBoxLayout()
 
@@ -789,7 +976,7 @@ class AboutDialog(QDialog):
         self.name.setFont(QFont('Arial', 18))
         self.lay.addWidget(self.name, alignment=Qt.AlignmentFlag.AlignHCenter)
 
-        self.text: QLabel = QLabel('Version: 0.3.1\n\nVladimir Varenik\nAll rights reserved', self)
+        self.text: QLabel = QLabel('Version: 0.4.0\n\nVladimir Varenik\nAll rights reserved', self)
         self.lay.addWidget(self.text)
 
         self.setLayout(self.lay)

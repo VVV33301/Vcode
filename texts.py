@@ -15,6 +15,7 @@ delete_btn = {'en': 'Delete', 'ru': 'Удалить', 'de': 'Löschen'}
 rename_btn = {'en': 'Rename', 'ru': 'Переименовать', 'de': 'Umbenennen'}
 add_btn = {'en': 'Add', 'ru': 'Добавить', 'de': 'Hinzufügen'}
 edit_highlight_btn = {'en': 'Edit highlight', 'ru': 'Редактировать выделение', 'de': 'Hervorhebung bearbeiten'}
+remove_btn = {'en': 'Remove', 'ru': 'Удалить', 'de': 'Löschen'}
 
 autorun = {'en': 'Autorun', 'ru': 'Автозагрузка', 'de': 'Automatisch laden'}
 autosave = {'en': 'Autosave', 'ru': 'Автосохранение', 'de': 'Automatisches Speichern'}

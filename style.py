@@ -1,14 +1,18 @@
 STYLE = {
-    'Windows': '',
+    'System': '',
     'Dark':
         '''
         QMainWindow {
             background-color: rgb(80, 80, 90);
         } 
+        QWidget#empty {
+            background-color: rgb(115, 115, 125);
+            color: white;
+        }
         QDialog, QWidget {
             background-color: rgb(80, 80, 90);
             color: white;
-        } 
+        }
         QMenuBar, QMenu, QToolBar {
             background-color: rgb(115, 115, 125);
             color: white;
@@ -18,7 +22,6 @@ STYLE = {
             color: rgb(245, 245, 245);
         }
         QTabBar {
-            background-color: rgb(30, 30, 60);
             color: black;
         }
         QLabel, QRadioButton, QCheckBox {
