@@ -1,8 +1,11 @@
 class|def|for|while|if|elif|else|try|except|finally|with|match|case = {"tab": 1};
-(\w+)(?=\() = {"foreground": [136, 136, 198]};
+\b(def|class) \w+\b = {"foreground": [80, 160, 255]};
+\b__\w+__\b = {"foreground": [255, 0, 255]};
+\b(ArithmeticError|AssertionError|AttributeError|BaseException|BaseExceptionGroup|BlockingIOError|BrokenPipeError|BufferError|BytesWarning|ChildProcessError|ConnectionAbortedError|ConnectionError|ConnectionRefusedError|ConnectionResetError|DeprecationWarning|EOFError|Ellipsis|EncodingWarning|EnvironmentError|Exception|ExceptionGroup|FileExistsError|FileNotFoundError|FloatingPointError|FutureWarning|GeneratorExit|IOError|ImportError|ImportWarning|IndentationError|IndexError|InterruptedError|IsADirectoryError|KeyError|KeyboardInterrupt|LookupError|MemoryError|ModuleNotFoundError|NameError|NotADirectoryError|NotImplemented|NotImplementedError|OSError|OverflowError|PendingDeprecationWarning|PermissionError|ProcessLookupError|RecursionError|ReferenceError|ResourceWarning|RuntimeError|RuntimeWarning|StopAsyncIteration|StopIteration|SyntaxError|SyntaxWarning|SystemError|SystemExit|TabError|TimeoutError|TypeError|UnboundLocalError|UnicodeDecodeError|UnicodeEncodeError|UnicodeError|UnicodeTranslateError|UnicodeWarning|UserWarning|ValueError|Warning|WindowsError|ZeroDivisionError|__build_class__|__debug__|__doc__|__import__|__loader__|__name__|__package__|__spec__|abs|aiter|all|anext|any|ascii|bin|bool|breakpoint|bytearray|bytes|callable|chr|classmethod|compile|complex|copyright|credits|delattr|dict|dir|divmod|enumerate|eval|exec|exit|filter|float|format|frozenset|getattr|globals|hasattr|hash|help|hex|id|input|int|isinstance|issubclass|iter|len|license|list|locals|map|max|memoryview|min|next|object|oct|open|ord|pow|print|property|quit|range|repr|reversed|round|set|setattr|slice|sorted|staticmethod|str|sum|super|tuple|type|vars|zip)\b = {"foreground": [136, 136, 198]};
 ^\s*@([\w.]+) = {"foreground": [127, 255, 127]};
-\b(class|def|for|while|if|elif|else|try|except|finally|with|import|from|match|case|lambda|as|in|is|not|and|or|True|False|None|async|await|del|return|raise|yield|pass)\b = {"foreground": [255, 127, 0]};
+\b(class|def|for|while|if|elif|else|try|except|finally|with|import|from|match|case|lambda|as|in|is|not|and|or|True|False|None|async|await|del|return|raise|yield|pass|assert)\b = {"foreground": [255, 127, 0]};
+\bself\b = {"foreground": [195, 15, 195]};
 \b\d+(\.\d+)? = {"foreground": [0, 255, 255]};
 0b[0-1]+|0o[0-7]+|0x[0-9a-fA-F]+ = {"foreground": [0, 200, 200]};
 (#[^\n]*) = {"foreground": [127, 127, 127]};
-"([^"]*)"|'([^']*)' = {"foreground": [0, 200, 0]};
+(r|f|b|)("([^"]*)"|'([^']*)') = {"foreground": [0, 200, 0]};

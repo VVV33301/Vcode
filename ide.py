@@ -6,7 +6,7 @@ import re
 import json
 import shutil
 from webbrowser import open as openweb
-from os.path import isfile, isdir, dirname, abspath, join
+from os.path import isfile, isdir, dirname, abspath, join, exists
 
 from PyQt6.QtWidgets import *
 from PyQt6.QtCore import *
@@ -16,7 +16,7 @@ import texts
 from style import STYLE
 
 
-def resource_path(relative_path) -> join:
+def resource_path(relative_path: str) -> str:
     return join(getattr(sys, '_MEIPASS', dirname(abspath(sys.argv[0]))), relative_path)
 
 
@@ -52,8 +52,19 @@ encodings: list[str] = ['ascii', 'big5', 'big5hkscs', 'cp037', 'cp1006', 'cp1026
                         'mac-roman', 'mac-turkish', 'ptcp154', 'shift_jis', 'shift_jis_2004', 'shift_jisx0213',
                         'utf-16', 'utf-16-be', 'utf-16-le', 'utf-32', 'utf-32-be', 'utf-32-le', 'utf-7', 'utf-8',
                         'utf-8-sig']
-with open(resource_path('languages.json')) as llf:
-    language_list: dict[str, dict[str, str]] = json.load(llf)
+if exists(resource_path('languages.json')):
+    with open(resource_path('languages.json')) as llf:
+        language_list: dict[str, dict[str, str]] = json.load(llf)
+else:
+    language_list: dict[str, dict[str, str]] = {
+        "Python": {
+            "highlight": "highlights/python.hl",
+            "file_formats": ["py", "pyw", "pyi"],
+            "start_command": "python \"{filename}\""
+        }
+    }
+    with open(resource_path('languages.json'), 'w') as llf:
+        json.dump(language_list, llf)
 
 
 class Highlighter(QSyntaxHighlighter):
@@ -90,7 +101,7 @@ class Highlighter(QSyntaxHighlighter):
 
     def highlightBlock(self, text: str) -> None:
         for pattern, char in self.mapping.items():
-            for match in re.finditer(pattern, text):
+            for match in re.finditer(pattern, text, re.MULTILINE):
                 s, e = match.span()
                 self.setFormat(s, e - s, char)
 
@@ -151,7 +162,7 @@ class TextEditMenu(QMenu):
             lambda: openweb(f'https://www.google.com/search?q={self.p.textCursor().selectedText()}'))
         self.search.addAction(self.search_in_g)
 
-        self.search_in_so: QAction = QAction('Search in Stack Overflow', self)
+        self.search_in_so: QAction = QAction(self)
         self.search_in_so.triggered.connect(
             lambda: openweb(f'https://stackoverflow.com/search?q={self.p.textCursor().selectedText()}'))
         self.search.addAction(self.search_in_so)
@@ -357,10 +368,8 @@ class EditorTab(QTextEdit):
                         txt_1[-1] == '{' and txt_[self.textCursor().position() - 1] == '}' or \
                         txt_1[-1] == '<' and txt_[self.textCursor().position() - 1] == '>':
                     self.textCursor().insertText('    \n')
-            for s in re.findall(r'\b\S+\b', txt_1):
-                if s in self.highlighter.tab_words:
-                    self.textCursor().insertText('    ')
-                    break
+            if txt_1 and re.findall(r'\b\S+\b', txt_1)[0] in self.highlighter.tab_words:
+                self.textCursor().insertText('    ')
             e.accept()
         elif e.key() == Qt.Key.Key_ParenLeft:
             self.textCursor().insertText(f'({self.textCursor().selection().toPlainText()})')
@@ -400,6 +409,41 @@ class EditorTab(QTextEdit):
             self.textCursor().insertText(f'"{self.textCursor().selection().toPlainText()}"')
             cursor: QTextCursor = self.textCursor()
             cursor.movePosition(QTextCursor.MoveOperation.Left)
+            self.setTextCursor(cursor)
+            e.accept()
+        elif e.key() == Qt.Key.Key_ParenRight and (self.textCursor().position() < len(txt_) and
+                                                   txt_[self.textCursor().position() - 1] == '(' and
+                                                   txt_[self.textCursor().position()] == ')'):
+            cursor: QTextCursor = self.textCursor()
+            cursor.movePosition(QTextCursor.MoveOperation.Right)
+            self.setTextCursor(cursor)
+            e.accept()
+        elif e.key() == Qt.Key.Key_BracketRight and (self.textCursor().position() < len(txt_) and
+                                                     txt_[self.textCursor().position() - 1] == '[' and
+                                                     txt_[self.textCursor().position()] == ']'):
+            cursor: QTextCursor = self.textCursor()
+            cursor.movePosition(QTextCursor.MoveOperation.Right)
+            self.setTextCursor(cursor)
+            e.accept()
+        elif e.key() == Qt.Key.Key_BraceRight and (self.textCursor().position() < len(txt_) and
+                                                   txt_[self.textCursor().position() - 1] == '{' and
+                                                   txt_[self.textCursor().position()] == '}'):
+            cursor: QTextCursor = self.textCursor()
+            cursor.movePosition(QTextCursor.MoveOperation.Right)
+            self.setTextCursor(cursor)
+            e.accept()
+        elif e.key() == Qt.Key.Key_Apostrophe and (
+                self.textCursor().position() < len(txt_) and
+                txt_[self.textCursor().position() - 1] == txt_[self.textCursor().position()] == '\''):
+            cursor: QTextCursor = self.textCursor()
+            cursor.movePosition(QTextCursor.MoveOperation.Right)
+            self.setTextCursor(cursor)
+            e.accept()
+        elif e.key() == Qt.Key.Key_QuoteDbl and (
+                self.textCursor().position() < len(txt_) and
+                txt_[self.textCursor().position() - 1] == txt_[self.textCursor().position()] == '"'):
+            cursor: QTextCursor = self.textCursor()
+            cursor.movePosition(QTextCursor.MoveOperation.Right)
             self.setTextCursor(cursor)
             e.accept()
         else:
@@ -453,9 +497,8 @@ class IdeWindow(QMainWindow):
         self.setMinimumSize(300, 100)
         self.resize(1000, 700)
 
-        self.process: subprocess.Popen | None = None
-
         self.settings: QSettings = QSettings('Vcode', 'Settings')
+        self.options: QSettings = QSettings('Vcode', 'Options')
 
         self.about_window: AboutDialog = AboutDialog(self)
 
@@ -489,7 +532,6 @@ class IdeWindow(QMainWindow):
         self.splitter: QSplitter = QSplitter()
         self.splitter.addWidget(self.tree)
         self.splitter.addWidget(self.editor_tabs)
-        self.splitter.setSizes([225, 775])
         self.setCentralWidget(self.splitter)
 
         self.tool_bar: QToolBar = QToolBar(self)
@@ -588,6 +630,11 @@ class IdeWindow(QMainWindow):
             next(filter(lambda x: x.text() == 'Windows',
                         self.settings_window.findChildren(QRadioButton))).setChecked(True)
 
+        if not self.options.allKeys():
+            self.options.setValue('Splitter', [225, 775])
+            self.options.setValue('Folder', os.path.expanduser('~'))
+        self.splitter.setSizes(map(int, self.options.value('Splitter')))
+
         self.settings_window.language.setCurrentText(self.settings.value('Language').upper())
         self.settings_window.language.currentTextChanged.connect(
             lambda: self.select_language(self.settings_window.language.currentText().lower()))
@@ -634,6 +681,10 @@ class IdeWindow(QMainWindow):
         editor.contextMenuEvent = TextEditMenu(editor)
         editor.cursorPositionChanged.connect(lambda: self.position_code.setText('{}:{}'.format(
             editor.textCursor().blockNumber() + 1, editor.textCursor().positionInBlock() + 1)))
+        c: QTextCursor = editor.textCursor()
+        c.movePosition(QTextCursor.MoveOperation.End)
+        editor.setTextCursor(c)
+        editor.setFocus()
         for langname, language in language_list.items():
             if filename.rsplit('.', maxsplit=1)[-1] in language['file_formats']:
                 editor.setHighlighter(Highlighter(resource_path(language['highlight'])))
@@ -700,14 +751,10 @@ class IdeWindow(QMainWindow):
         elif sys.platform.startswith('linux'):
             os.system('gnome-terminal')
         else:
-            self.exit_code.setText('Can`t start terminal')
+            self.exit_code.setText('Can`t start terminal in this operating system')
 
     def start_program(self) -> None:
         if self.editor_tabs.count():
-            if self.process:
-                self.process.terminate()
-                self.process.kill()
-                return
             if not self.settings.value('Autosave') and \
                     self.editor_tabs.currentWidget().saved_text != self.editor_tabs.currentWidget().toPlainText():
                 button: QMessageBox.StandardButton = QMessageBox.warning(
@@ -724,42 +771,45 @@ class IdeWindow(QMainWindow):
         code: EditorTab = self.editor_tabs.currentWidget()
         if code.language in language_list.keys():
             com: str = code.file
+            tid: str = str(threading.current_thread().native_id)
             if sys.platform == 'win32':
-                with open('process.bat', 'w', encoding='utf-8') as bat:
-                    bat.write(f'''
+                with open(f'process_{tid}.bat', 'w', encoding='utf-8') as bat_win32:
+                    bat_win32.write(f'''
                               @echo off
+                              chcp 65001>nul
+                              echo Interrupted > {com}.output
                               {code.start_command.format(filename=com)}
                               echo Exit code: %errorlevel%
-                              pause
                               echo %errorlevel% > {com}.output
+                              pause
                               ''')
-                self.process = subprocess.Popen('process.bat', creationflags=subprocess.CREATE_NEW_CONSOLE,
-                                                process_group=subprocess.CREATE_NEW_PROCESS_GROUP)
-                self.process.wait()
-                os.remove('process.bat')
+                process = subprocess.Popen(f'process_{tid}.bat', creationflags=subprocess.CREATE_NEW_CONSOLE,
+                                           process_group=subprocess.CREATE_NEW_PROCESS_GROUP)
+                process.wait()
+                os.remove(f'process_{tid}.bat')
             elif sys.platform.startswith('linux'):
-                with open('process.sh', 'w', encoding='utf-8') as bat:
-                    bat.write(f'''
+                with open(f'process_{tid}.sh', 'w', encoding='utf-8') as bat_linux:
+                    bat_linux.write(f'''
                               #!/bin/bash
+                              echo "Interrupted" > {com}.output
                               {code.start_command.format(filename=com)}
                               echo "Exit code: $?"
-                              read -p "Press enter to continue..."
                               echo $? > {com}.output
+                              read -p "Press enter to continue..."
                               ''')
-                self.process = subprocess.Popen('process.sh', creationflags=subprocess.CREATE_NEW_CONSOLE,
-                                                process_group=subprocess.CREATE_NEW_PROCESS_GROUP)
-                self.process.wait()
-                os.remove('process.sh')
+                process = subprocess.Popen(f'process_{tid}.sh', creationflags=subprocess.CREATE_NEW_CONSOLE,
+                                           process_group=subprocess.CREATE_NEW_PROCESS_GROUP)
+                process.wait()
+                os.remove(f'process_{tid}.sh')
             else:
-                self.process = subprocess.Popen('pwd', creationflags=subprocess.CREATE_NEW_CONSOLE,
-                                                process_group=subprocess.CREATE_NEW_PROCESS_GROUP)
-            with open(f'{com}.output') as bat:
-                if len(x := bat.readlines()) == 1:
+                with open(f'{com}.output', 'w') as bat_w:
+                    bat_w.write('Can`t start terminal in this operating system')
+            with open(f'{com}.output') as bat_win32:
+                if len(x := bat_win32.readlines()) == 1:
                     self.exit_code.setText(f'Exit code: {x[0].rstrip()}')
                 else:
                     self.exit_code.setText('Interrupted')
             os.remove(f'{com}.output')
-            self.process = None
         else:
             self.exit_code.setText(f'Can`t start "{code.filename}"')
 
@@ -768,23 +818,27 @@ class IdeWindow(QMainWindow):
             self.editor_tabs.currentWidget().save()
 
     def new_file(self) -> None:
-        file, _ = QFileDialog.getSaveFileName(directory=os.path.expanduser('~') + '/untitled',
+        file, _ = QFileDialog.getSaveFileName(directory=self.options.value('Folder') + '/untitled',
                                               filter=';;'.join(update_filters()))
         if file:
+            self.options.setValue('Folder', file.rsplit('/', maxsplit=1)[0])
             open(file, 'w', encoding=self.settings.value('Encoding')).close()
             self.add_tab(file)
 
     def open_file(self) -> None:
-        file, _ = QFileDialog.getOpenFileName(directory=os.path.expanduser('~'), filter=';;'.join(update_filters()))
+        file, _ = QFileDialog.getOpenFileName(directory=self.options.value('Folder'),
+                                              filter=';;'.join(update_filters()))
         if file:
+            self.options.setValue('Folder', file.rsplit('/', maxsplit=1)[0])
             self.add_tab(file)
 
     def save_as(self) -> None:
         if self.editor_tabs.count():
             path, _ = QFileDialog.getSaveFileName(
-                directory=os.path.expanduser('~') + '/' + self.editor_tabs.currentWidget().filename,
+                directory=self.options.value('Folder') + '/' + self.editor_tabs.currentWidget().filename,
                 filter=';;'.join(update_filters()))
             if path:
+                self.options.setValue('Folder', path.rsplit('/', maxsplit=1)[0])
                 with open(path, 'w') as sf:
                     sf.write(self.editor_tabs.currentWidget().toPlainText())
 
@@ -863,6 +917,7 @@ class IdeWindow(QMainWindow):
         save_last: QSettings = QSettings('Vcode', 'Last')
         for tab in self.editor_tabs.findChildren(EditorTab):
             save_last.setValue(tab.file, None)
+        self.options.setValue('Splitter', self.splitter.sizes())
 
 
 class SettingsDialog(QDialog):
@@ -976,7 +1031,7 @@ class AboutDialog(QDialog):
         self.name.setFont(QFont('Arial', 18))
         self.lay.addWidget(self.name, alignment=Qt.AlignmentFlag.AlignHCenter)
 
-        self.text: QLabel = QLabel('Version: 0.4.0\n\nVladimir Varenik\nAll rights reserved', self)
+        self.text: QLabel = QLabel('Version: 0.4.1\n\nVladimir Varenik\nAll rights reserved', self)
         self.lay.addWidget(self.text)
 
         self.setLayout(self.lay)
@@ -1054,8 +1109,8 @@ class HighlightMaker(QDialog):
 
     def save_highlighter(self) -> None:
         with open(self.highlighter, 'w') as hlf:
-            for i in self.findChildren(HighlightMakerString):
-                hlf.write(i.rstring.text() + ' = {' + i.json_params.text() + '};\n')
+            for hms in self.findChildren(HighlightMakerString):
+                hlf.write(hms.rstring.text() + ' = {' + hms.json_params.text() + '};\n')
 
 
 if __name__ == '__main__':
