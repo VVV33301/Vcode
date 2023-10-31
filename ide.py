@@ -611,7 +611,7 @@ class IdeWindow(QMainWindow):
         self.about_menu.addAction(self.about_btn)
 
         self.feedback_btn: QAction = QAction(self)
-        self.feedback_btn.triggered.connect(lambda: openweb('https://forms.gle/Y21dgoB7ehy3hJjD6'))
+        self.feedback_btn.triggered.connect(lambda: openweb('http://vcode.rf.gd/feedback'))
         self.about_menu.addAction(self.feedback_btn)
 
         if len(self.settings.allKeys()) == 6:
@@ -668,7 +668,7 @@ class IdeWindow(QMainWindow):
         else:
             self.setWindowTitle('Vcode')
 
-    def add_tab(self, filename) -> None:
+    def add_tab(self, filename: str, row: int | None = None) -> None:
         if not isfile(filename):
             return
         for tab in self.editor_tabs.findChildren(EditorTab):
@@ -690,7 +690,10 @@ class IdeWindow(QMainWindow):
                 editor.setHighlighter(Highlighter(resource_path(language['highlight'])))
                 editor.start_command = language['start_command']
                 editor.language = langname
-        self.editor_tabs.setCurrentIndex(self.editor_tabs.addTab(editor, editor.filename))
+        if row is None:
+            self.editor_tabs.setCurrentIndex(self.editor_tabs.addTab(editor, editor.filename))
+        else:
+            self.editor_tabs.setCurrentIndex(self.editor_tabs.insertTab(row, editor, editor.filename))
 
     def close_tab(self, tab) -> None:
         widget: EditorTab = self.editor_tabs.widget(tab)
@@ -916,7 +919,8 @@ class IdeWindow(QMainWindow):
                 break
         save_last: QSettings = QSettings('Vcode', 'Last')
         for tab in self.editor_tabs.findChildren(EditorTab):
-            save_last.setValue(tab.file, None)
+            save_last.setValue(tab.file, self.editor_tabs.indexOf(tab))
+        save_last.setValue('current', self.editor_tabs.currentIndex())
         self.options.setValue('Splitter', self.splitter.sizes())
 
 
@@ -1127,7 +1131,10 @@ if __name__ == '__main__':
                 hm: HighlightMaker = HighlightMaker(arg)
                 hm.setWindowTitle(f'{arg} - Vcode highlight maker')
                 hm.exec()
-    for item in QSettings('Vcode', 'Last').allKeys():
-        ide.add_tab(item)
-    QSettings('Vcode', 'Last').clear()
+    last: QSettings = QSettings('Vcode', 'Last')
+    for n in last.allKeys()[:-1]:
+        ide.add_tab(n, last.value(n))
+    if last.value('current') is not None:
+        ide.editor_tabs.setCurrentIndex(last.value('current'))
+    last.clear()
     sys.exit(app.exec())

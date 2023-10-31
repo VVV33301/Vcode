@@ -8,4 +8,4 @@ class|def|for|while|if|elif|else|try|except|finally|with|match|case = {"tab": 1}
 \b\d+(\.\d+)? = {"foreground": [0, 255, 255]};
 0b[0-1]+|0o[0-7]+|0x[0-9a-fA-F]+ = {"foreground": [0, 200, 200]};
 (#[^\n]*) = {"foreground": [127, 127, 127]};
-(r|f|b|)("([^"]*)"|'([^']*)') = {"foreground": [0, 200, 0]};
+(r|f|b|)("([^"]*)"|'([^']*)') = {"foreground": [0, 240, 0]};
