@@ -109,9 +109,9 @@ class Highlighter(QSyntaxHighlighter):
 class TextEditMenu(QMenu):
     """Custom QTextEdit Menu"""
 
-    def __init__(self, parent: QTextEdit, *args, **kwargs) -> None:
+    def __init__(self, parent: QTextEdit | QPlainTextEdit, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
-        self.p: QTextEdit = parent
+        self.p: QTextEdit | QPlainTextEdit = parent
 
         self.undo: QAction = QAction(self)
         self.undo.triggered.connect(self.p.undo)
@@ -324,11 +324,19 @@ class LineEditMenu(QMenu):
         self.popup(event.globalPos())
 
 
-class EditorTab(QTextEdit):
+class EditorTab(QPlainTextEdit):
     """Editor text place"""
 
-    def __init__(self, file: str, *args, **kwargs) -> None:
-        super().__init__(*args, **kwargs)
+    def __init__(self, file: str, parent: QWidget = None, *args, **kwargs) -> None:
+        super().__init__(parent, *args, **kwargs)
+        self.p: QWidget = parent
+
+        self.line_num: LineNumberArea = LineNumberArea(self)
+        self.blockCountChanged.connect(self.update_line_number_area_width)
+        self.updateRequest.connect(self.update_line_number_area)
+        self.cursorPositionChanged.connect(self.highlight_current_line)
+        self.update_line_number_area_width()
+
         self.enc_s: QSettings = QSettings('Vcode', 'Settings')
         self.file: str = file.replace('\\', '/')
         self.filename: str = file.replace('\\', '/').split('/')[-1]
@@ -336,15 +344,16 @@ class EditorTab(QTextEdit):
             with open(file, encoding=self.enc_s.value('Encoding')) as cf:
                 self.setPlainText(cf.read())
         except UnicodeDecodeError:
-            self.setText('Unsupported encoding')
+            self.setPlainText('Unsupported encoding')
             self.setReadOnly(True)
             self.save = lambda: None
+            self.line_num.setVisible(False)
         self.saved_text: str = self.toPlainText()
         self.highlighter: Highlighter | None = None
         self.start_command: str | None = None
         self.language: str = ''
 
-    def setHighlighter(self, highlighter: Highlighter) -> None:
+    def set_highlighter(self, highlighter: Highlighter) -> None:
         self.highlighter: Highlighter = highlighter
         self.highlighter.setDocument(self.document())
 
@@ -353,101 +362,168 @@ class EditorTab(QTextEdit):
             sf.write(self.toPlainText())
         self.saved_text: str = self.toPlainText()
 
+    def update_line_number_area_width(self) -> None:
+        self.setViewportMargins(50, 0, 0, 0)
+
+    def update_line_number_area(self, rect: QRect, dy: int) -> None:
+        if dy:
+            self.line_num.scroll(0, dy)
+        else:
+            self.line_num.update(0, rect.y(), self.line_num.width(), rect.height())
+        if rect.contains(self.viewport().rect()):
+            self.update_line_number_area_width()
+
+    def resizeEvent(self, event: QResizeEvent) -> None:
+        super().resizeEvent(event)
+        cr: QRect = self.contentsRect()
+        self.line_num.setGeometry(QRect(cr.left(), cr.top(), 50, cr.height()))
+
+    def update_line_event(self, event: QPaintEvent) -> None:
+        painter: QPainter = QPainter(self.line_num)
+        painter.setFont(self.font())
+        block: QTextBlock = self.firstVisibleBlock()
+        block_number: int = block.blockNumber()
+        top: float = self.blockBoundingGeometry(block).translated(self.contentOffset()).top()
+        bottom: float = top + self.blockBoundingRect(block).height()
+        height: int = self.fontMetrics().height()
+        while block.isValid() and (top <= event.rect().bottom()):
+            if block.isVisible() and (bottom >= event.rect().top()):
+                painter.drawText(QRect(0, int(top), self.line_num.width(), height),
+                                 Qt.AlignmentFlag.AlignRight, str(block_number + 1))
+            block: QTextBlock = block.next()
+            top = bottom
+            bottom = top + self.blockBoundingRect(block).height()
+            block_number += 1
+
+    def highlight_current_line(self) -> None:
+        selections: list = []
+        if not self.isReadOnly():
+            selection: QTextEdit.ExtraSelection = QTextEdit.ExtraSelection()
+            color: QColor = self.palette().color(QPalette.ColorRole.Window).toRgb()
+            selection.format.setBackground(QColor(color.red() - 10, color.green() - 10, color.blue() - 10))
+            selection.format.setProperty(QTextFormat.Property.FullWidthSelection, True)
+            selection.cursor: QTextCursor = self.textCursor()
+            selection.cursor.clearSelection()
+            selections.append(selection)
+        self.setExtraSelections(selections)
+
     def keyPressEvent(self, e: QKeyEvent) -> None:
         txt_: str = self.toPlainText()
+        cursor: QTextCursor = self.textCursor()
         if e.key() == Qt.Key.Key_Tab:
-            self.textCursor().insertText('    ' + '\n    '.join(
-                self.textCursor().selection().toPlainText().split('\n')))
+            cursor.insertText('    ' + '\n    '.join(
+                cursor.selection().toPlainText().split('\n')))
+            self.setTextCursor(cursor)
             e.accept()
         elif e.key() == Qt.Key.Key_Return:
-            txt_1: str = txt_[:self.textCursor().position()].rsplit('\n', maxsplit=1)[-1]
-            self.textCursor().insertText('\n' + re.split(r'\S', txt_1, 1)[0])
-            if self.textCursor().position() <= len(txt_) and txt_1:
-                if txt_1[-1] == '(' and txt_[self.textCursor().position() - 1] == ')' or \
-                        txt_1[-1] == '[' and txt_[self.textCursor().position() - 1] == ']' or \
-                        txt_1[-1] == '{' and txt_[self.textCursor().position() - 1] == '}' or \
-                        txt_1[-1] == '<' and txt_[self.textCursor().position() - 1] == '>':
-                    self.textCursor().insertText('    \n')
-            if txt_1 and re.findall(r'\b\S+\b', txt_1)[0] in self.highlighter.tab_words:
-                self.textCursor().insertText('    ')
+            txt_1: str = txt_[:cursor.position()].rsplit('\n', maxsplit=1)[-1]
+            cursor.insertText('\n' + re.split(r'\S', txt_1, 1)[0])
+            if cursor.position() <= len(txt_) and txt_1:
+                if txt_1[-1] == '(' and txt_[cursor.position() - 1] == ')' or \
+                        txt_1[-1] == '[' and txt_[cursor.position() - 1] == ']' or \
+                        txt_1[-1] == '{' and txt_[cursor.position() - 1] == '}' or \
+                        txt_1[-1] == '<' and txt_[cursor.position() - 1] == '>':
+                    cursor.insertText('    \n')
+            if (fa := re.findall(r'\b\S+\b', txt_1)) and fa[0] in self.highlighter.tab_words:
+                cursor.insertText('    ')
+            self.setTextCursor(cursor)
+            e.accept()
+        elif (e.key() == Qt.Key.Key_Backspace and cursor.position() < len(txt_) and
+              txt_[cursor.position() - 1] + txt_[cursor.position()] in ['()', '[]', '{}', '<>', '\'\'', '""']):
+            cursor.setPosition(cursor.position() + 1)
+            cursor.setPosition(cursor.position() - 2, QTextCursor.MoveMode.KeepAnchor)
+            cursor.removeSelectedText()
+            self.setTextCursor(cursor)
+            e.accept()
+        elif (e.key() == Qt.Key.Key_Backspace and not cursor.selectedText() and
+              txt_[cursor.position() - 4:cursor.position()] == '    '):
+            cursor.setPosition(cursor.position() - 4, QTextCursor.MoveMode.KeepAnchor)
+            cursor.removeSelectedText()
+            self.setTextCursor(cursor)
             e.accept()
         elif e.key() == Qt.Key.Key_ParenLeft:
-            self.textCursor().insertText(f'({self.textCursor().selection().toPlainText()})')
-            cursor: QTextCursor = self.textCursor()
+            cursor.insertText(f'({cursor.selection().toPlainText()})')
             cursor.movePosition(QTextCursor.MoveOperation.Left)
             self.setTextCursor(cursor)
             e.accept()
         elif e.key() == Qt.Key.Key_BracketLeft:
-            self.textCursor().insertText(f'[{self.textCursor().selection().toPlainText()}]')
-            cursor: QTextCursor = self.textCursor()
+            cursor.insertText(f'[{cursor.selection().toPlainText()}]')
             cursor.movePosition(QTextCursor.MoveOperation.Left)
             self.setTextCursor(cursor)
             e.accept()
         elif e.key() == Qt.Key.Key_BraceLeft:
-            self.textCursor().insertText(f'{{{self.textCursor().selection().toPlainText()}}}')
-            cursor: QTextCursor = self.textCursor()
+            cursor.insertText(f'{{{cursor.selection().toPlainText()}}}')
             cursor.movePosition(QTextCursor.MoveOperation.Left)
             self.setTextCursor(cursor)
             e.accept()
-        elif e.key() == Qt.Key.Key_Less and self.textCursor().selectedText():
-            self.textCursor().insertText(f'<{self.textCursor().selection().toPlainText()}>')
-            cursor: QTextCursor = self.textCursor()
+        elif e.key() == Qt.Key.Key_Less and cursor.selectedText():
+            cursor.insertText(f'<{cursor.selection().toPlainText()}>')
             cursor.movePosition(QTextCursor.MoveOperation.Left)
             self.setTextCursor(cursor)
             e.accept()
-        elif e.key() == Qt.Key.Key_Apostrophe and (self.textCursor().selectedText() or
-                                                   self.textCursor().position() == len(txt_) or
-                                                   txt_[self.textCursor().position()] in ' \n'):
-            self.textCursor().insertText(f'\'{self.textCursor().selection().toPlainText()}\'')
-            cursor: QTextCursor = self.textCursor()
+        elif e.key() == Qt.Key.Key_Apostrophe and (cursor.selectedText() or
+                                                   cursor.position() == len(txt_) or
+                                                   txt_[cursor.position()] in ' \n'):
+            cursor.insertText(f'\'{cursor.selection().toPlainText()}\'')
             cursor.movePosition(QTextCursor.MoveOperation.Left)
             self.setTextCursor(cursor)
             e.accept()
-        elif e.key() == Qt.Key.Key_QuoteDbl and (self.textCursor().selectedText() or
-                                                 self.textCursor().position() == len(txt_) or
-                                                 txt_[self.textCursor().position()] in ' \n'):
-            self.textCursor().insertText(f'"{self.textCursor().selection().toPlainText()}"')
-            cursor: QTextCursor = self.textCursor()
+        elif e.key() == Qt.Key.Key_QuoteDbl and (cursor.selectedText() or
+                                                 cursor.position() == len(txt_) or
+                                                 txt_[cursor.position()] in ' \n'):
+            cursor.insertText(f'"{cursor.selection().toPlainText()}"')
             cursor.movePosition(QTextCursor.MoveOperation.Left)
             self.setTextCursor(cursor)
             e.accept()
-        elif e.key() == Qt.Key.Key_ParenRight and (self.textCursor().position() < len(txt_) and
-                                                   txt_[self.textCursor().position() - 1] == '(' and
-                                                   txt_[self.textCursor().position()] == ')'):
-            cursor: QTextCursor = self.textCursor()
+        elif e.key() == Qt.Key.Key_ParenRight and (cursor.position() < len(txt_) and
+                                                   txt_[cursor.position() - 1] == '(' and
+                                                   txt_[cursor.position()] == ')'):
             cursor.movePosition(QTextCursor.MoveOperation.Right)
             self.setTextCursor(cursor)
             e.accept()
-        elif e.key() == Qt.Key.Key_BracketRight and (self.textCursor().position() < len(txt_) and
-                                                     txt_[self.textCursor().position() - 1] == '[' and
-                                                     txt_[self.textCursor().position()] == ']'):
-            cursor: QTextCursor = self.textCursor()
+        elif e.key() == Qt.Key.Key_BracketRight and (cursor.position() < len(txt_) and
+                                                     txt_[cursor.position() - 1] == '[' and
+                                                     txt_[cursor.position()] == ']'):
             cursor.movePosition(QTextCursor.MoveOperation.Right)
             self.setTextCursor(cursor)
             e.accept()
-        elif e.key() == Qt.Key.Key_BraceRight and (self.textCursor().position() < len(txt_) and
-                                                   txt_[self.textCursor().position() - 1] == '{' and
-                                                   txt_[self.textCursor().position()] == '}'):
-            cursor: QTextCursor = self.textCursor()
+        elif e.key() == Qt.Key.Key_BraceRight and (cursor.position() < len(txt_) and
+                                                   txt_[cursor.position() - 1] == '{' and
+                                                   txt_[cursor.position()] == '}'):
             cursor.movePosition(QTextCursor.MoveOperation.Right)
             self.setTextCursor(cursor)
             e.accept()
         elif e.key() == Qt.Key.Key_Apostrophe and (
-                self.textCursor().position() < len(txt_) and
-                txt_[self.textCursor().position() - 1] == txt_[self.textCursor().position()] == '\''):
-            cursor: QTextCursor = self.textCursor()
+                cursor.position() < len(txt_) and
+                txt_[cursor.position() - 1] == txt_[cursor.position()] == '\''):
             cursor.movePosition(QTextCursor.MoveOperation.Right)
             self.setTextCursor(cursor)
             e.accept()
         elif e.key() == Qt.Key.Key_QuoteDbl and (
-                self.textCursor().position() < len(txt_) and
-                txt_[self.textCursor().position() - 1] == txt_[self.textCursor().position()] == '"'):
-            cursor: QTextCursor = self.textCursor()
+                cursor.position() < len(txt_) and
+                txt_[cursor.position() - 1] == txt_[cursor.position()] == '"'):
             cursor.movePosition(QTextCursor.MoveOperation.Right)
             self.setTextCursor(cursor)
             e.accept()
         else:
-            QTextEdit.keyPressEvent(self, e)
+            QPlainTextEdit.keyPressEvent(self, e)
+
+    def dropEvent(self, e):
+        self.p.dropEvent(e)
+
+
+class LineNumberArea(QWidget):
+    """Area for numbers of lines"""
+
+    def __init__(self, editor: EditorTab):
+        super().__init__(editor)
+        self.editor: EditorTab = editor
+
+    def sizeHint(self):
+        return QSize(50, 0)
+
+    def paintEvent(self, event):
+        self.editor.update_line_event(event)
 
 
 class TabWidget(QTabWidget):
@@ -456,7 +532,7 @@ class TabWidget(QTabWidget):
     def __init__(self, *args) -> None:
         super().__init__(*args)
         self.lalay: QHBoxLayout = QHBoxLayout()
-        self.empty_widget = QPushButton(self)
+        self.empty_widget: QPushButton = QPushButton(self)
         self.lalay.addWidget(self.empty_widget, alignment=Qt.AlignmentFlag.AlignCenter)
         self.setLayout(self.lalay)
         self.currentChanged.connect(self.empty)
@@ -495,7 +571,7 @@ class IdeWindow(QMainWindow):
         super().__init__()
         self.setWindowTitle('Vcode')
         self.setMinimumSize(300, 100)
-        self.resize(1000, 700)
+        self.setAcceptDrops(True)
 
         self.settings: QSettings = QSettings('Vcode', 'Settings')
         self.options: QSettings = QSettings('Vcode', 'Options')
@@ -611,7 +687,7 @@ class IdeWindow(QMainWindow):
         self.about_menu.addAction(self.about_btn)
 
         self.feedback_btn: QAction = QAction(self)
-        self.feedback_btn.triggered.connect(lambda: openweb('http://vcode.rf.gd/feedback'))
+        self.feedback_btn.triggered.connect(lambda: openweb('https://vcode.rf.gd/feedback'))
         self.about_menu.addAction(self.feedback_btn)
 
         if len(self.settings.allKeys()) == 6:
@@ -625,14 +701,15 @@ class IdeWindow(QMainWindow):
             else:
                 self.settings.setValue('Font', QFont())
             self.select_language('en')
-            self.select_style('Windows')
+            self.select_style('System')
             self.settings.setValue('Encoding', 'utf-8')
-            next(filter(lambda x: x.text() == 'Windows',
+            next(filter(lambda x: x.text() == 'System',
                         self.settings_window.findChildren(QRadioButton))).setChecked(True)
 
         if not self.options.allKeys():
             self.options.setValue('Splitter', [225, 775])
             self.options.setValue('Folder', os.path.expanduser('~'))
+            self.options.setValue('Geometry', 'Not init')
         self.splitter.setSizes(map(int, self.options.value('Splitter')))
 
         self.settings_window.language.setCurrentText(self.settings.value('Language').upper())
@@ -656,6 +733,15 @@ class IdeWindow(QMainWindow):
         self.settings_window.font_size.setValue(self.settings.value('Font').pointSize())
         self.settings_window.font_size.valueChanged.connect(self.select_font)
 
+        if self.options.value('Geometry') == 'Maximized':
+            self.showMaximized()
+        elif self.options.value('Geometry') == 'Not init':
+            self.resize(1000, 700)
+            self.show()
+        else:
+            self.setGeometry(self.options.value('Geometry'))
+            self.show()
+
     def sel_tab(self) -> None:
         if self.editor_tabs.count():
             self.setWindowTitle(self.editor_tabs.tabText(self.editor_tabs.currentIndex()) + ' - Vcode')
@@ -675,7 +761,14 @@ class IdeWindow(QMainWindow):
             if tab.file == filename:
                 self.editor_tabs.setCurrentWidget(tab)
                 return
-        editor: EditorTab = EditorTab(filename.replace('\\', '/'), self)
+        filename = filename.replace('\\', '/')
+        if filename.endswith('.hl'):
+            hmt: HighlightMaker = HighlightMaker(filename)
+            hmt.setWindowTitle(f'{filename.split("/")[-1]} - Vcode highlight maker')
+            hmt.exec()
+            return
+        editor: EditorTab = EditorTab(filename, self)
+        editor.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
         editor.textChanged.connect(self.auto_save)
         editor.setFont(self.settings.value('Font'))
         editor.contextMenuEvent = TextEditMenu(editor)
@@ -687,15 +780,16 @@ class IdeWindow(QMainWindow):
         editor.setFocus()
         for langname, language in language_list.items():
             if filename.rsplit('.', maxsplit=1)[-1] in language['file_formats']:
-                editor.setHighlighter(Highlighter(resource_path(language['highlight'])))
+                editor.set_highlighter(Highlighter(resource_path(language['highlight'])))
                 editor.start_command = language['start_command']
                 editor.language = langname
         if row is None:
             self.editor_tabs.setCurrentIndex(self.editor_tabs.addTab(editor, editor.filename))
         else:
             self.editor_tabs.setCurrentIndex(self.editor_tabs.insertTab(row, editor, editor.filename))
+        self.editor_tabs.setTabToolTip(self.editor_tabs.currentIndex(), editor.file)
 
-    def close_tab(self, tab) -> None:
+    def close_tab(self, tab: int) -> None:
         widget: EditorTab = self.editor_tabs.widget(tab)
         if widget.saved_text != widget.toPlainText():
             button: QMessageBox.StandardButton = QMessageBox.warning(
@@ -710,7 +804,7 @@ class IdeWindow(QMainWindow):
         self.editor_tabs.removeTab(tab)
         widget.deleteLater()
 
-    def select_language(self, language) -> None:
+    def select_language(self, language: str) -> None:
         self.settings.setValue('Language', language)
 
         self.settings_window.setWindowTitle(texts.settings_window[language])
@@ -733,7 +827,7 @@ class IdeWindow(QMainWindow):
         self.settings_window.style_select_group.setTitle(texts.style_select_group[language])
         self.settings_window.font_select_group.setTitle(texts.font_select_group[language])
 
-    def select_style(self, style_name) -> None:
+    def select_style(self, style_name: str) -> None:
         if style_name in STYLE.keys():
             self.settings.setValue('Style', style_name)
             self.setStyleSheet(STYLE[style_name])
@@ -748,7 +842,7 @@ class IdeWindow(QMainWindow):
         self.settings.setValue('Autorun', int(self.settings_window.autorun.isChecked()))
         set_autorun(self.settings_window.autorun.isChecked())
 
-    def start_terminal(self):
+    def start_terminal(self) -> None:
         if sys.platform == 'win32':
             os.system('start "Vcode terminal" powershell')
         elif sys.platform.startswith('linux'):
@@ -786,8 +880,9 @@ class IdeWindow(QMainWindow):
                               echo %errorlevel% > {com}.output
                               pause
                               ''')
-                process = subprocess.Popen(f'process_{tid}.bat', creationflags=subprocess.CREATE_NEW_CONSOLE,
-                                           process_group=subprocess.CREATE_NEW_PROCESS_GROUP)
+                process: subprocess.Popen = subprocess.Popen(f'process_{tid}.bat',
+                                                             creationflags=subprocess.CREATE_NEW_CONSOLE,
+                                                             process_group=subprocess.CREATE_NEW_PROCESS_GROUP)
                 process.wait()
                 os.remove(f'process_{tid}.bat')
             elif sys.platform.startswith('linux'):
@@ -800,8 +895,9 @@ class IdeWindow(QMainWindow):
                               echo $? > {com}.output
                               read -p "Press enter to continue..."
                               ''')
-                process = subprocess.Popen(f'process_{tid}.sh', creationflags=subprocess.CREATE_NEW_CONSOLE,
-                                           process_group=subprocess.CREATE_NEW_PROCESS_GROUP)
+                process: subprocess.Popen = subprocess.Popen(f'process_{tid}.sh',
+                                                             creationflags=subprocess.CREATE_NEW_CONSOLE,
+                                                             process_group=subprocess.CREATE_NEW_PROCESS_GROUP)
                 process.wait()
                 os.remove(f'process_{tid}.sh')
             else:
@@ -900,6 +996,17 @@ class IdeWindow(QMainWindow):
                     else:
                         self.exit_code.setText(f'Clone repository {git_file.textValue()}')
 
+    def dragEnterEvent(self, event: QDragEnterEvent) -> None:
+        mime: QMimeData = event.mimeData()
+        if mime.hasUrls() and len(mime.urls()) == 1:
+            event.acceptProposedAction()
+        else:
+            event.ignore()
+
+    def dropEvent(self, event: QDropEvent) -> None:
+        self.add_tab(event.mimeData().urls()[0].toString().replace('file:///', ''))
+        return super().dropEvent(event)
+
     def closeEvent(self, a0: QCloseEvent) -> None:
         for tab in self.editor_tabs.findChildren(EditorTab):
             if tab.saved_text != tab.toPlainText():
@@ -922,6 +1029,10 @@ class IdeWindow(QMainWindow):
             save_last.setValue(tab.file, self.editor_tabs.indexOf(tab))
         save_last.setValue('current', self.editor_tabs.currentIndex())
         self.options.setValue('Splitter', self.splitter.sizes())
+        if self.isMaximized():
+            self.options.setValue('Geometry', 'Maximized')
+        else:
+            self.options.setValue('Geometry', self.geometry())
 
 
 class SettingsDialog(QDialog):
@@ -1000,7 +1111,7 @@ class SettingsDialog(QDialog):
         menu.popup(event.globalPos())
 
     def remove_language(self) -> None:
-        name = self.languages_list.selectedItems()[0]
+        name: QListWidgetItem = self.languages_list.selectedItems()[0]
         del language_list[name.text()]
         with open(resource_path('languages.json'), 'w') as llfw:
             json.dump(language_list, llfw)
@@ -1022,7 +1133,7 @@ class AboutDialog(QDialog):
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self.setModal(True)
-        self.setWindowTitle('Vcode v0.4')
+        self.setWindowTitle('Vcode v0.5')
         self.setMinimumSize(250, 200)
         self.lay: QVBoxLayout = QVBoxLayout()
 
@@ -1035,7 +1146,7 @@ class AboutDialog(QDialog):
         self.name.setFont(QFont('Arial', 18))
         self.lay.addWidget(self.name, alignment=Qt.AlignmentFlag.AlignHCenter)
 
-        self.text: QLabel = QLabel('Version: 0.4.1\n\nVladimir Varenik\nAll rights reserved', self)
+        self.text: QLabel = QLabel('Version: 0.5.0\n\nVladimir Varenik\nAll rights reserved', self)
         self.lay.addWidget(self.text)
 
         self.setLayout(self.lay)
@@ -1121,8 +1232,12 @@ if __name__ == '__main__':
     app: QApplication = QApplication(sys.argv)
     app.setWindowIcon(QIcon(resource_path('Vcode.ico')))
     ide: IdeWindow = IdeWindow()
-    ide.show()
     ide.settings_window.autorun.setEnabled(False)
+    last: QSettings = QSettings('Vcode', 'Last')
+    for n in last.allKeys()[:-1]:
+        ide.add_tab(n, last.value(n))
+    if last.value('current') is not None:
+        ide.editor_tabs.setCurrentIndex(last.value('current'))
     for arg in sys.argv[1:]:
         if isfile(arg):
             if not arg.endswith('.hl'):
@@ -1131,10 +1246,5 @@ if __name__ == '__main__':
                 hm: HighlightMaker = HighlightMaker(arg)
                 hm.setWindowTitle(f'{arg} - Vcode highlight maker')
                 hm.exec()
-    last: QSettings = QSettings('Vcode', 'Last')
-    for n in last.allKeys()[:-1]:
-        ide.add_tab(n, last.value(n))
-    if last.value('current') is not None:
-        ide.editor_tabs.setCurrentIndex(last.value('current'))
     last.clear()
     sys.exit(app.exec())
