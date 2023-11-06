@@ -19,6 +19,7 @@ remove_btn = {'en': 'Remove', 'ru': 'Удалить', 'de': 'Löschen'}
 
 autorun = {'en': 'Autorun', 'ru': 'Автозагрузка', 'de': 'Automatisch laden'}
 autosave = {'en': 'Autosave', 'ru': 'Автосохранение', 'de': 'Automatisches Speichern'}
+recent = {'en': 'Open recent', 'ru': 'Открыть недавние', 'de': 'Zuletzt öffnen'}
 style_select_group = {'en': 'Style', 'ru': 'Стиль', 'de': 'Stil'}
 font_select_group = {'en': 'Font', 'ru': 'Шрифт', 'de': 'Schriftart'}
 

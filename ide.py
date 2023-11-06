@@ -61,6 +61,11 @@ else:
             "highlight": "highlights/python.hl",
             "file_formats": ["py", "pyw", "pyi"],
             "start_command": "python \"{filename}\""
+        },
+        "Html": {
+            "highlight": "highlights/html.hl",
+            "file_formats": ["htm", "html"],
+            "start_command": "start \"\" \"{filename}\""
         }
     }
     with open(resource_path('languages.json'), 'w') as llf:
@@ -334,7 +339,6 @@ class EditorTab(QPlainTextEdit):
         self.line_num: LineNumberArea = LineNumberArea(self)
         self.blockCountChanged.connect(self.update_line_number_area_width)
         self.updateRequest.connect(self.update_line_number_area)
-        self.cursorPositionChanged.connect(self.highlight_current_line)
         self.update_line_number_area_width()
 
         self.enc_s: QSettings = QSettings('Vcode', 'Settings')
@@ -362,8 +366,11 @@ class EditorTab(QPlainTextEdit):
             sf.write(self.toPlainText())
         self.saved_text: str = self.toPlainText()
 
+    def line_number_area_width(self):
+        return max(45, 5 + self.fontMetrics().boundingRect('9').width() * (len(str(self.blockCount())) + 1))
+
     def update_line_number_area_width(self) -> None:
-        self.setViewportMargins(50, 0, 0, 0)
+        self.setViewportMargins(self.line_number_area_width(), 0, 0, 0)
 
     def update_line_number_area(self, rect: QRect, dy: int) -> None:
         if dy:
@@ -376,7 +383,7 @@ class EditorTab(QPlainTextEdit):
     def resizeEvent(self, event: QResizeEvent) -> None:
         super().resizeEvent(event)
         cr: QRect = self.contentsRect()
-        self.line_num.setGeometry(QRect(cr.left(), cr.top(), 50, cr.height()))
+        self.line_num.setGeometry(QRect(cr.left(), cr.top(), self.line_number_area_width(), cr.height()))
 
     def update_line_event(self, event: QPaintEvent) -> None:
         painter: QPainter = QPainter(self.line_num)
@@ -508,8 +515,14 @@ class EditorTab(QPlainTextEdit):
         else:
             QPlainTextEdit.keyPressEvent(self, e)
 
-    def dropEvent(self, e):
-        self.p.dropEvent(e)
+    def dropEvent(self, e: QDropEvent) -> None:
+        mime: QMimeData = e.mimeData()
+        if mime.hasUrls() and len(mime.urls()) == 1:
+            self.p.dropEvent(e)
+        elif mime.hasText():
+            super().dropEvent(e)
+        else:
+            e.ignore()
 
 
 class LineNumberArea(QWidget):
@@ -518,9 +531,6 @@ class LineNumberArea(QWidget):
     def __init__(self, editor: EditorTab):
         super().__init__(editor)
         self.editor: EditorTab = editor
-
-    def sizeHint(self):
-        return QSize(50, 0)
 
     def paintEvent(self, event):
         self.editor.update_line_event(event)
@@ -690,12 +700,13 @@ class IdeWindow(QMainWindow):
         self.feedback_btn.triggered.connect(lambda: openweb('https://vcode.rf.gd/feedback'))
         self.about_menu.addAction(self.feedback_btn)
 
-        if len(self.settings.allKeys()) == 6:
+        if len(self.settings.allKeys()) == 7:
             self.select_language(self.settings.value('Language'))
             self.select_style(self.settings.value('Style'))
         else:
             self.settings.setValue('Autorun', 0)
             self.settings.setValue('Autosave', 0)
+            self.settings.setValue('Recent', 1)
             if 'Consolas' in QFontDatabase.families():
                 self.settings.setValue('Font', QFont('Consolas', 12))
             else:
@@ -726,6 +737,10 @@ class IdeWindow(QMainWindow):
         self.settings_window.autosave.setChecked(bool(self.settings.value('Autosave')))
         self.settings_window.autosave.stateChanged.connect(
             lambda: self.settings.setValue('Autosave', int(self.settings_window.autosave.isChecked())))
+
+        self.settings_window.recent.setChecked(bool(self.settings.value('Recent')))
+        self.settings_window.recent.stateChanged.connect(
+            lambda: self.settings.setValue('Recent', int(self.settings_window.recent.isChecked())))
 
         self.settings_window.fonts.setCurrentText(self.settings.value('Font').family())
         self.settings_window.fonts.currentTextChanged.connect(self.select_font)
@@ -778,6 +793,7 @@ class IdeWindow(QMainWindow):
         c.movePosition(QTextCursor.MoveOperation.End)
         editor.setTextCursor(c)
         editor.setFocus()
+        editor.cursorPositionChanged.connect(editor.highlight_current_line)
         for langname, language in language_list.items():
             if filename.rsplit('.', maxsplit=1)[-1] in language['file_formats']:
                 editor.set_highlighter(Highlighter(resource_path(language['highlight'])))
@@ -824,6 +840,7 @@ class IdeWindow(QMainWindow):
 
         self.settings_window.autorun.setText(texts.autorun[language])
         self.settings_window.autosave.setText(texts.autosave[language])
+        self.settings_window.recent.setText(texts.recent[language])
         self.settings_window.style_select_group.setTitle(texts.style_select_group[language])
         self.settings_window.font_select_group.setTitle(texts.font_select_group[language])
 
@@ -876,7 +893,7 @@ class IdeWindow(QMainWindow):
                               chcp 65001>nul
                               echo Interrupted > {com}.output
                               {code.start_command.format(filename=com)}
-                              echo Exit code: %errorlevel%
+                              echo Exit code: %errorlevel% 
                               echo %errorlevel% > {com}.output
                               pause
                               ''')
@@ -891,20 +908,20 @@ class IdeWindow(QMainWindow):
                               #!/bin/bash
                               echo "Interrupted" > {com}.output
                               {code.start_command.format(filename=com)}
-                              echo "Exit code: $?"
-                              echo $? > {com}.output
-                              read -p "Press enter to continue..."
+                              ec=$?
+                              echo "Exit code: $ec"
+                              echo $ec > {com}.output
+                              read -r -p "Press enter to continue..." key
                               ''')
-                process: subprocess.Popen = subprocess.Popen(f'process_{tid}.sh',
-                                                             creationflags=subprocess.CREATE_NEW_CONSOLE,
-                                                             process_group=subprocess.CREATE_NEW_PROCESS_GROUP)
+                os.system(f'chmod +x {resource_path(f"process_{tid}.sh")}')
+                process: subprocess.Popen = subprocess.Popen(resource_path(f"process_{tid}.sh"), shell=True)
                 process.wait()
                 os.remove(f'process_{tid}.sh')
             else:
                 with open(f'{com}.output', 'w') as bat_w:
                     bat_w.write('Can`t start terminal in this operating system')
-            with open(f'{com}.output') as bat_win32:
-                if len(x := bat_win32.readlines()) == 1:
+            with open(f'{com}.output') as bat_output:
+                if len(x := bat_output.readlines()) == 1:
                     self.exit_code.setText(f'Exit code: {x[0].rstrip()}')
                 else:
                     self.exit_code.setText('Interrupted')
@@ -1026,7 +1043,7 @@ class IdeWindow(QMainWindow):
                 break
         save_last: QSettings = QSettings('Vcode', 'Last')
         for tab in self.editor_tabs.findChildren(EditorTab):
-            save_last.setValue(tab.file, self.editor_tabs.indexOf(tab))
+            save_last.setValue('V' + tab.file, self.editor_tabs.indexOf(tab))
         save_last.setValue('current', self.editor_tabs.currentIndex())
         self.options.setValue('Splitter', self.splitter.sizes())
         if self.isMaximized():
@@ -1070,6 +1087,9 @@ class SettingsDialog(QDialog):
 
         self.autosave: QCheckBox = QCheckBox(self)
         self.check_boxes_layout.addWidget(self.autosave)
+
+        self.recent: QCheckBox = QCheckBox(self)
+        self.check_boxes_layout.addWidget(self.recent)
 
         self.encoding: QComboBox = QComboBox(self)
         self.encoding.addItems(encodings)
@@ -1233,11 +1253,14 @@ if __name__ == '__main__':
     app.setWindowIcon(QIcon(resource_path('Vcode.ico')))
     ide: IdeWindow = IdeWindow()
     ide.settings_window.autorun.setEnabled(False)
-    last: QSettings = QSettings('Vcode', 'Last')
-    for n in last.allKeys()[:-1]:
-        ide.add_tab(n, last.value(n))
-    if last.value('current') is not None:
-        ide.editor_tabs.setCurrentIndex(last.value('current'))
+    if int(ide.settings.value('Recent')):
+        last: QSettings = QSettings('Vcode', 'Last')
+        for n in last.allKeys():
+            if n != 'current':
+                ide.add_tab(n[1:], int(last.value(n)))
+            else:
+                ide.editor_tabs.setCurrentIndex(int(last.value('current')))
+        last.clear()
     for arg in sys.argv[1:]:
         if isfile(arg):
             if not arg.endswith('.hl'):
@@ -1246,5 +1269,4 @@ if __name__ == '__main__':
                 hm: HighlightMaker = HighlightMaker(arg)
                 hm.setWindowTitle(f'{arg} - Vcode highlight maker')
                 hm.exec()
-    last.clear()
     sys.exit(app.exec())

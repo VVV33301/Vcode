@@ -3,5 +3,10 @@
         "highlight": "highlights/python.hl",
         "file_formats": ["py", "pyw", "pyi"],
         "start_command": "python \"{filename}\""
+    },
+    "Html": {
+        "highlight": "highlights/html.hl",
+        "file_formats": ["htm", "html"],
+        "start_command": "start \"\" \"{filename}\""
     }
 }
