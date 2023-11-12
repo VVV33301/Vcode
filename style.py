@@ -5,7 +5,7 @@ STYLE = {
         QMainWindow {
             background-color: rgb(80, 80, 90);
         } 
-        QWidget#empty {
+        #empty {
             background-color: rgb(115, 115, 125);
             color: white;
         }
@@ -75,7 +75,7 @@ STYLE = {
         QAbstractButton:hover {
             background-color: rgb(90, 90, 100);
         }
-        QLabel#exit_code {
+        #exit_code {
             font-size: 18px;
         }
         ''',
@@ -129,7 +129,7 @@ STYLE = {
         QComboBox QAbstractItemView::item:hover, QComboBox QAbstractItemView::item:selected {
             background-color: rgb(185, 185, 174);
         }
-        QLabel#exit_code {
+        #exit_code {
             font-size: 18px;
         }
         '''

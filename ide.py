@@ -6,7 +6,7 @@ import re
 import json
 import shutil
 from webbrowser import open as openweb
-from os.path import isfile, isdir, dirname, abspath, join, exists
+from os.path import isfile, isdir, dirname, abspath, join, exists, expanduser
 
 from PyQt6.QtWidgets import *
 from PyQt6.QtCore import *
@@ -343,7 +343,7 @@ class EditorTab(QPlainTextEdit):
 
         self.enc_s: QSettings = QSettings('Vcode', 'Settings')
         self.file: str = file.replace('\\', '/')
-        self.filename: str = file.replace('\\', '/').split('/')[-1]
+        self.path, self.filename = self.file.rsplit('/', maxsplit=1)
         try:
             with open(file, encoding=self.enc_s.value('Encoding')) as cf:
                 self.setPlainText(cf.read())
@@ -367,10 +367,10 @@ class EditorTab(QPlainTextEdit):
         self.saved_text: str = self.toPlainText()
 
     def line_number_area_width(self):
-        return max(45, 5 + self.fontMetrics().boundingRect('9').width() * (len(str(self.blockCount())) + 1))
+        return max(45, 5 + self.fontMetrics().boundingRect('9').width() * (len(str(self.blockCount())) + 3))
 
     def update_line_number_area_width(self) -> None:
-        self.setViewportMargins(self.line_number_area_width(), 0, 0, 0)
+        self.setViewportMargins(self.line_number_area_width() + 7, 0, 0, 0)
 
     def update_line_number_area(self, rect: QRect, dy: int) -> None:
         if dy:
@@ -396,7 +396,7 @@ class EditorTab(QPlainTextEdit):
         while block.isValid() and (top <= event.rect().bottom()):
             if block.isVisible() and (bottom >= event.rect().top()):
                 painter.drawText(QRect(0, int(top), self.line_num.width(), height),
-                                 Qt.AlignmentFlag.AlignRight, str(block_number + 1))
+                                 Qt.AlignmentFlag.AlignRight, str(block_number + 1) + ' |')
             block: QTextBlock = block.next()
             top = bottom
             bottom = top + self.blockBoundingRect(block).height()
@@ -532,7 +532,7 @@ class LineNumberArea(QWidget):
         super().__init__(editor)
         self.editor: EditorTab = editor
 
-    def paintEvent(self, event):
+    def paintEvent(self, event: QPaintEvent) -> None:
         self.editor.update_line_event(event)
 
 
@@ -719,7 +719,7 @@ class IdeWindow(QMainWindow):
 
         if not self.options.allKeys():
             self.options.setValue('Splitter', [225, 775])
-            self.options.setValue('Folder', os.path.expanduser('~'))
+            self.options.setValue('Folder', expanduser('~'))
             self.options.setValue('Geometry', 'Not init')
         self.splitter.setSizes(map(int, self.options.value('Splitter')))
 
@@ -883,18 +883,20 @@ class IdeWindow(QMainWindow):
 
     def program(self) -> None:
         code: EditorTab = self.editor_tabs.currentWidget()
+        pth: str = code.path
+        fnm: str = code.filename
         if code.language in language_list.keys():
-            com: str = code.file
             tid: str = str(threading.current_thread().native_id)
             if sys.platform == 'win32':
                 with open(f'process_{tid}.bat', 'w', encoding='utf-8') as bat_win32:
                     bat_win32.write(f'''
                               @echo off
                               chcp 65001>nul
-                              echo Interrupted > {com}.output
-                              {code.start_command.format(filename=com)}
+                              cd {pth}
+                              echo Interrupted > {fnm}.output
+                              {code.start_command.format(filename=fnm)}
                               echo Exit code: %errorlevel% 
-                              echo %errorlevel% > {com}.output
+                              echo %errorlevel% > {fnm}.output
                               pause
                               ''')
                 process: subprocess.Popen = subprocess.Popen(f'process_{tid}.bat',
@@ -906,11 +908,12 @@ class IdeWindow(QMainWindow):
                 with open(f'process_{tid}.sh', 'w', encoding='utf-8') as bat_linux:
                     bat_linux.write(f'''
                               #!/bin/bash
-                              echo "Interrupted" > {com}.output
-                              {code.start_command.format(filename=com)}
+                              cd {pth}
+                              echo "Interrupted" > {fnm}.output
+                              {code.start_command.format(filename=fnm)}
                               ec=$?
                               echo "Exit code: $ec"
-                              echo $ec > {com}.output
+                              echo $ec > {fnm}.output
                               read -r -p "Press enter to continue..." key
                               ''')
                 os.system(f'chmod +x {resource_path(f"process_{tid}.sh")}')
@@ -918,16 +921,16 @@ class IdeWindow(QMainWindow):
                 process.wait()
                 os.remove(f'process_{tid}.sh')
             else:
-                with open(f'{com}.output', 'w') as bat_w:
+                with open(f'{pth}/{fnm}.output', 'w') as bat_w:
                     bat_w.write('Can`t start terminal in this operating system')
-            with open(f'{com}.output') as bat_output:
+            with open(f'{pth}/{fnm}.output') as bat_output:
                 if len(x := bat_output.readlines()) == 1:
                     self.exit_code.setText(f'Exit code: {x[0].rstrip()}')
                 else:
                     self.exit_code.setText('Interrupted')
-            os.remove(f'{com}.output')
+            os.remove(f'{pth}/{fnm}.output')
         else:
-            self.exit_code.setText(f'Can`t start "{code.filename}"')
+            self.exit_code.setText(f'Can`t start "{fnm}"')
 
     def save_file(self) -> None:
         if self.editor_tabs.count():
@@ -957,6 +960,7 @@ class IdeWindow(QMainWindow):
                 self.options.setValue('Folder', path.rsplit('/', maxsplit=1)[0])
                 with open(path, 'w') as sf:
                     sf.write(self.editor_tabs.currentWidget().toPlainText())
+                self.add_tab(path)
 
     def auto_save(self) -> None:
         if self.settings.value('Autosave'):
@@ -1153,7 +1157,7 @@ class AboutDialog(QDialog):
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self.setModal(True)
-        self.setWindowTitle('Vcode v0.5')
+        self.setWindowTitle('Vcode v0.5.1')
         self.setMinimumSize(250, 200)
         self.lay: QVBoxLayout = QVBoxLayout()
 
@@ -1166,7 +1170,7 @@ class AboutDialog(QDialog):
         self.name.setFont(QFont('Arial', 18))
         self.lay.addWidget(self.name, alignment=Qt.AlignmentFlag.AlignHCenter)
 
-        self.text: QLabel = QLabel('Version: 0.5.0\n\nVladimir Varenik\nAll rights reserved', self)
+        self.text: QLabel = QLabel('Version: 0.5.1\n\nVladimir Varenik\nAll rights reserved', self)
         self.lay.addWidget(self.text)
 
         self.setLayout(self.lay)
@@ -1253,12 +1257,12 @@ if __name__ == '__main__':
     app.setWindowIcon(QIcon(resource_path('Vcode.ico')))
     ide: IdeWindow = IdeWindow()
     ide.settings_window.autorun.setEnabled(False)
-    if int(ide.settings.value('Recent')):
+    if ide.settings.value('Recent') == 1:
         last: QSettings = QSettings('Vcode', 'Last')
         for n in last.allKeys():
             if n != 'current':
                 ide.add_tab(n[1:], int(last.value(n)))
-            else:
+            elif last.value('current') is not None:
                 ide.editor_tabs.setCurrentIndex(int(last.value('current')))
         last.clear()
     for arg in sys.argv[1:]:
