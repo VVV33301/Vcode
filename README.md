@@ -2,11 +2,11 @@
   <p>Vcode</p> 
 </h1>
 <div align="center"> 
-  <img src="https://github.com/VVV33301/Vcode/assets/117539159/8826cc47-5fc4-4f19-898a-80c49acb5c32" alt="Vcode logo is here"/> 
+  <img src="https://vcode.rf.gd/Vcode.png" alt="Vcode logo is here"/> 
 </div>
 Это среда разработки (IDE) для Python и других языков
 
-<br>Сайт: http://vcode.rf.gd/
+<br>Сайт: https://vcode.rf.gd/
 
 ## Особенности
   + **Легковесность** - занимает на диске меньше 100 Мб
