@@ -366,7 +366,7 @@ class EditorTab(QPlainTextEdit):
             sf.write(self.toPlainText())
         self.saved_text: str = self.toPlainText()
 
-    def line_number_area_width(self):
+    def line_number_area_width(self) -> int:
         return max(45, 5 + self.fontMetrics().boundingRect('9').width() * (len(str(self.blockCount())) + 3))
 
     def update_line_number_area_width(self) -> None:
@@ -1260,7 +1260,7 @@ if __name__ == '__main__':
     if ide.settings.value('Recent') == 1:
         last: QSettings = QSettings('Vcode', 'Last')
         for n in last.allKeys():
-            if n != 'current':
+            if n != 'current' and last.value(n) is not None:
                 ide.add_tab(n[1:], int(last.value(n)))
             elif last.value('current') is not None:
                 ide.editor_tabs.setCurrentIndex(int(last.value('current')))
