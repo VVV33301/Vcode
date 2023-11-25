@@ -7,6 +7,7 @@ import json
 import shutil
 from webbrowser import open as openweb
 from os.path import isfile, isdir, dirname, abspath, join, exists, expanduser
+from requests import get
 
 from PyQt6.QtWidgets import *
 from PyQt6.QtCore import *
@@ -14,6 +15,9 @@ from PyQt6.QtGui import *
 
 import texts
 from style import STYLE
+
+
+VERSION = '0.6.0'
 
 
 def resource_path(relative_path: str) -> str:
@@ -341,11 +345,11 @@ class EditorTab(QPlainTextEdit):
         self.updateRequest.connect(self.update_line_number_area)
         self.update_line_number_area_width()
 
-        self.enc_s: QSettings = QSettings('Vcode', 'Settings')
+        self.pr_settings: QSettings = QSettings('Vcode', 'Settings')
         self.file: str = file.replace('\\', '/')
         self.path, self.filename = self.file.rsplit('/', maxsplit=1)
         try:
-            with open(file, encoding=self.enc_s.value('Encoding')) as cf:
+            with open(file, encoding=self.pr_settings.value('Encoding')) as cf:
                 self.setPlainText(cf.read())
         except UnicodeDecodeError:
             self.setPlainText('Unsupported encoding')
@@ -362,7 +366,7 @@ class EditorTab(QPlainTextEdit):
         self.highlighter.setDocument(self.document())
 
     def save(self) -> None:
-        with open(self.file, 'w', encoding=self.enc_s.value('Encoding')) as sf:
+        with open(self.file, 'w', encoding=self.pr_settings.value('Encoding')) as sf:
             sf.write(self.toPlainText())
         self.saved_text: str = self.toPlainText()
 
@@ -417,8 +421,9 @@ class EditorTab(QPlainTextEdit):
     def keyPressEvent(self, e: QKeyEvent) -> None:
         txt_: str = self.toPlainText()
         cursor: QTextCursor = self.textCursor()
+        tab_sz: int = self.pr_settings.value('Tab size')
         if e.key() == Qt.Key.Key_Tab:
-            cursor.insertText('    ' + '\n    '.join(
+            cursor.insertText(' ' * tab_sz + f'\n{" " * tab_sz}'.join(
                 cursor.selection().toPlainText().split('\n')))
             self.setTextCursor(cursor)
             e.accept()
@@ -430,9 +435,9 @@ class EditorTab(QPlainTextEdit):
                         txt_1[-1] == '[' and txt_[cursor.position() - 1] == ']' or \
                         txt_1[-1] == '{' and txt_[cursor.position() - 1] == '}' or \
                         txt_1[-1] == '<' and txt_[cursor.position() - 1] == '>':
-                    cursor.insertText('    \n')
+                    cursor.insertText(' ' * tab_sz + '\n')
             if (fa := re.findall(r'\b\S+\b', txt_1)) and fa[0] in self.highlighter.tab_words:
-                cursor.insertText('    ')
+                cursor.insertText(' ' * tab_sz)
             self.setTextCursor(cursor)
             e.accept()
         elif (e.key() == Qt.Key.Key_Backspace and cursor.position() < len(txt_) and
@@ -443,8 +448,8 @@ class EditorTab(QPlainTextEdit):
             self.setTextCursor(cursor)
             e.accept()
         elif (e.key() == Qt.Key.Key_Backspace and not cursor.selectedText() and
-              txt_[cursor.position() - 4:cursor.position()] == '    '):
-            cursor.setPosition(cursor.position() - 4, QTextCursor.MoveMode.KeepAnchor)
+              txt_[cursor.position() - tab_sz:cursor.position()] == ' ' * tab_sz):
+            cursor.setPosition(cursor.position() - tab_sz, QTextCursor.MoveMode.KeepAnchor)
             cursor.removeSelectedText()
             self.setTextCursor(cursor)
             e.accept()
@@ -515,9 +520,12 @@ class EditorTab(QPlainTextEdit):
         else:
             QPlainTextEdit.keyPressEvent(self, e)
 
+    def dragEnterEvent(self, e: QDragEnterEvent) -> None:
+        pass
+
     def dropEvent(self, e: QDropEvent) -> None:
         mime: QMimeData = e.mimeData()
-        if mime.hasUrls() and len(mime.urls()) == 1:
+        if mime.hasUrls():
             self.p.dropEvent(e)
         elif mime.hasText():
             super().dropEvent(e)
@@ -700,22 +708,34 @@ class IdeWindow(QMainWindow):
         self.feedback_btn.triggered.connect(lambda: openweb('https://vcode.rf.gd/feedback'))
         self.about_menu.addAction(self.feedback_btn)
 
-        if len(self.settings.allKeys()) == 7:
+        self.download_btn: QAction = QAction(self)
+        self.download_btn.triggered.connect(lambda: openweb('https://vcode.rf.gd/download'))
+
+        if len(self.settings.allKeys()) == 8:
             self.select_language(self.settings.value('Language'))
             self.select_style(self.settings.value('Style'))
         else:
-            self.settings.setValue('Autorun', 0)
-            self.settings.setValue('Autosave', 0)
-            self.settings.setValue('Recent', 1)
-            if 'Consolas' in QFontDatabase.families():
-                self.settings.setValue('Font', QFont('Consolas', 12))
-            else:
-                self.settings.setValue('Font', QFont())
-            self.select_language('en')
-            self.select_style('System')
-            self.settings.setValue('Encoding', 'utf-8')
-            next(filter(lambda x: x.text() == 'System',
-                        self.settings_window.findChildren(QRadioButton))).setChecked(True)
+            if self.settings.value('Autorun') is None:
+                self.settings.setValue('Autorun', 0)
+            if self.settings.value('Autosave') is None:
+                self.settings.setValue('Autosave', 0)
+            if self.settings.value('Recent') is None:
+                self.settings.setValue('Recent', 1)
+            if self.settings.value('Font') is None:
+                if 'Consolas' in QFontDatabase.families():
+                    self.settings.setValue('Font', QFont('Consolas', 12))
+                else:
+                    self.settings.setValue('Font', QFont())
+            if self.settings.value('Language') is None:
+                self.select_language('en')
+            if self.settings.value('Style') is None:
+                self.select_style('System')
+            if self.settings.value('Encoding') is None:
+                self.settings.setValue('Encoding', 'utf-8')
+                next(filter(lambda x: x.text() == 'System',
+                            self.settings_window.findChildren(QRadioButton))).setChecked(True)
+            if self.settings.value('Tab size') is None:
+                self.settings.setValue('Tab size', 4)
 
         if not self.options.allKeys():
             self.options.setValue('Splitter', [225, 775])
@@ -742,6 +762,10 @@ class IdeWindow(QMainWindow):
         self.settings_window.recent.stateChanged.connect(
             lambda: self.settings.setValue('Recent', int(self.settings_window.recent.isChecked())))
 
+        self.settings_window.tab_size.setValue(int(self.settings.value('Tab size')))
+        self.settings_window.tab_size.valueChanged.connect(
+            lambda: self.settings.setValue('Tab size', self.settings_window.tab_size.value()))
+
         self.settings_window.fonts.setCurrentText(self.settings.value('Font').family())
         self.settings_window.fonts.currentTextChanged.connect(self.select_font)
 
@@ -756,6 +780,18 @@ class IdeWindow(QMainWindow):
         else:
             self.setGeometry(self.options.value('Geometry'))
             self.show()
+
+        self.check_updates()
+
+    def check_updates(self) -> None:
+        def check():
+            try:
+                if VERSION not in get('https://github.com/VVV33301/Vcode/releases/latest').text.split('title>')[1]:
+                    self.menuBar().addAction(self.download_btn)
+            except OSError:
+                pass
+
+        threading.Thread(target=check).start()
 
     def sel_tab(self) -> None:
         if self.editor_tabs.count():
@@ -837,10 +873,12 @@ class IdeWindow(QMainWindow):
         self.about_menu.setTitle(texts.about_menu[language])
         self.about_btn.setText(texts.about_btn[language])
         self.feedback_btn.setText(texts.feedback_btn[language])
+        self.download_btn.setText(texts.download_btn[language])
 
         self.settings_window.autorun.setText(texts.autorun[language])
         self.settings_window.autosave.setText(texts.autosave[language])
         self.settings_window.recent.setText(texts.recent[language])
+        self.settings_window.tab_size.setPrefix(texts.tab_size[language])
         self.settings_window.style_select_group.setTitle(texts.style_select_group[language])
         self.settings_window.font_select_group.setTitle(texts.font_select_group[language])
 
@@ -1019,13 +1057,14 @@ class IdeWindow(QMainWindow):
 
     def dragEnterEvent(self, event: QDragEnterEvent) -> None:
         mime: QMimeData = event.mimeData()
-        if mime.hasUrls() and len(mime.urls()) == 1:
+        if mime.hasUrls():
             event.acceptProposedAction()
         else:
             event.ignore()
 
     def dropEvent(self, event: QDropEvent) -> None:
-        self.add_tab(event.mimeData().urls()[0].toString().replace('file:///', ''))
+        for url in event.mimeData().urls():
+            self.add_tab(url.toString().replace('file:///', ''))
         return super().dropEvent(event)
 
     def closeEvent(self, a0: QCloseEvent) -> None:
@@ -1076,6 +1115,8 @@ class SettingsDialog(QDialog):
         self.font_select_layout.addWidget(self.fonts)
 
         self.font_size: QSpinBox = QSpinBox(self)
+        self.font_size.setMinimum(1)
+        self.font_size.setMaximum(400)
         self.font_select_layout.addWidget(self.font_size)
 
         self.check_boxes_group: QWidget = QWidget(self)
@@ -1094,6 +1135,11 @@ class SettingsDialog(QDialog):
 
         self.recent: QCheckBox = QCheckBox(self)
         self.check_boxes_layout.addWidget(self.recent)
+
+        self.tab_size: QSpinBox = QSpinBox(self)
+        self.tab_size.setMinimum(1)
+        self.tab_size.setMaximum(16)
+        self.check_boxes_layout.addWidget(self.tab_size)
 
         self.encoding: QComboBox = QComboBox(self)
         self.encoding.addItems(encodings)
@@ -1157,7 +1203,7 @@ class AboutDialog(QDialog):
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self.setModal(True)
-        self.setWindowTitle('Vcode v0.5.1')
+        self.setWindowTitle(f'Vcode v{VERSION}')
         self.setMinimumSize(250, 200)
         self.lay: QVBoxLayout = QVBoxLayout()
 
@@ -1170,7 +1216,7 @@ class AboutDialog(QDialog):
         self.name.setFont(QFont('Arial', 18))
         self.lay.addWidget(self.name, alignment=Qt.AlignmentFlag.AlignHCenter)
 
-        self.text: QLabel = QLabel('Version: 0.5.1\n\nVladimir Varenik\nAll rights reserved', self)
+        self.text: QLabel = QLabel(f'Version: {VERSION}\n\nVladimir Varenik\nAll rights reserved', self)
         self.lay.addWidget(self.text)
 
         self.setLayout(self.lay)
@@ -1231,7 +1277,7 @@ class HighlightMaker(QDialog):
         self.setLayout(layout)
         with open(highlighter) as hlf:
             for i in hlf.read().split(';')[:-1]:
-                str_item: HighlightMakerString = HighlightMakerString(i.split(' = ')[0], i.split(' = ')[-1])
+                str_item: HighlightMakerString = HighlightMakerString(*i.split(' = '))
                 str_item.remove_btn.clicked.connect(lambda: self.layout_hl.removeWidget(self.sender().parent()))
                 self.layout_hl.addWidget(str_item)
         layout.addLayout(self.layout_hl, 0, 0, 1, 2)

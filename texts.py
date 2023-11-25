@@ -16,10 +16,12 @@ rename_btn = {'en': 'Rename', 'ru': 'Переименовать', 'de': 'Umbenen
 add_btn = {'en': 'Add', 'ru': 'Добавить', 'de': 'Hinzufügen'}
 edit_highlight_btn = {'en': 'Edit highlight', 'ru': 'Редактировать выделение', 'de': 'Hervorhebung bearbeiten'}
 remove_btn = {'en': 'Remove', 'ru': 'Удалить', 'de': 'Löschen'}
+download_btn = {'en': 'Update Vcode', 'ru': 'Обновить Vcode', 'de': 'Vcode aktualisieren'}
 
 autorun = {'en': 'Autorun', 'ru': 'Автозагрузка', 'de': 'Automatisch laden'}
 autosave = {'en': 'Autosave', 'ru': 'Автосохранение', 'de': 'Automatisches Speichern'}
 recent = {'en': 'Open recent', 'ru': 'Открыть недавние', 'de': 'Zuletzt öffnen'}
+tab_size = {'en': 'Tab size: ', 'ru': 'Размер отступа: ', 'de': 'Tab-Größe: '}
 style_select_group = {'en': 'Style', 'ru': 'Стиль', 'de': 'Stil'}
 font_select_group = {'en': 'Font', 'ru': 'Шрифт', 'de': 'Schriftart'}
 
