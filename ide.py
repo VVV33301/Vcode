@@ -1124,7 +1124,7 @@ class SettingsDialog(QDialog):
         self.check_boxes_group.setLayout(self.check_boxes_layout)
 
         self.language: QComboBox = QComboBox(self)
-        self.language.addItems(['EN', 'RU', 'DE'])
+        self.language.addItems(['EN', 'RU', 'DE', 'CH'])
         self.check_boxes_layout.addWidget(self.language)
 
         self.autorun: QCheckBox = QCheckBox(self)
