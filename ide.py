@@ -399,7 +399,7 @@ class GitTab(QWidget):
             self.git_repo.index.commit(git_descr.textValue())
 
     def git_push(self):
-        
+        self.git_repo.remotes.origin.push()
 
 
 class EditorTab(QPlainTextEdit):
