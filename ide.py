@@ -8,6 +8,8 @@ import shutil
 from webbrowser import open as openweb
 from os.path import isfile, isdir, dirname, abspath, join, exists, expanduser
 from requests import get
+import psutil
+import git
 
 from PyQt6.QtWidgets import *
 from PyQt6.QtCore import *
@@ -15,7 +17,6 @@ from PyQt6.QtGui import *
 
 import texts
 from style import STYLE
-
 
 VERSION = '0.6.0'
 
@@ -333,6 +334,74 @@ class LineEditMenu(QMenu):
         self.popup(event.globalPos())
 
 
+class SystemMonitor(QWidget):
+    def __init__(self, pid: int):
+        super().__init__()
+        while True:
+            print(psutil.Process(pid).cpu_percent())
+
+
+class GitTab(QWidget):
+    def __init__(self, path: str, parent_exit_code_label: QLabel | None = None):
+        if not self.git_check():
+            raise Exception('Git not installed')
+        super().__init__()
+        self.path: str = path
+
+        if parent_exit_code_label is not None:
+            self.exit_code: QLabel = parent_exit_code_label
+        else:
+            self.exit_code: QLabel = QLabel()
+
+        self.git_repo: git.Repo = git.Repo(path)
+
+        self.lay: QGridLayout = QGridLayout(self)
+
+        self.branch: QComboBox = QComboBox(self)
+        self.branch.addItems([i.name for i in self.git_repo.branches])
+        self.branch.setCurrentText(self.git_repo.active_branch.name)
+        self.branch.currentTextChanged.connect(lambda: self.change_branch(self.branch.currentText()))
+        self.lay.addWidget(self.branch)
+
+        self.repo_list: QTreeView = QTreeView(self)
+        self.repo_list.contextMenuEvent = TreeViewMenu(self.repo_list, self)
+        self.repo_list_model: QFileSystemModel = QFileSystemModel(self)
+        self.repo_list_model.setRootPath(path)
+        self.repo_list.setModel(self.repo_list_model)
+        self.repo_list.setRootIndex(self.repo_list_model.index(path))
+        self.lay.addWidget(self.repo_list)
+
+    def git_check(self):
+        try:
+            subprocess.run('git -v')
+            return True
+        except FileNotFoundError:
+            self.exit_code.setText('Git not installed')
+            return False
+
+    def change_branch(self, branch: str):
+        self.git_repo.head.reference = branch
+        self.git_repo.head.reset(working_tree=True)
+
+    def git_commit(self):
+        git_descr: QInputDialog = QInputDialog(self)
+        git_descr.exec()
+        if git_descr.textValue():
+            '''p: subprocess.Popen = subprocess.Popen(f'git commit -m "{git_descr.textValue()}" {self.path}',
+                                                   stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+            p.wait()
+            if p.returncode:
+                self.exit_code.setText(p.stdout.read().decode(sys.stdin.encoding).strip())
+            else:
+                self.exit_code.setText(f'Commit repository {self.path}')'''
+            for i in self.repo_list.selectedIndexes():
+                self.git_repo.index.add(self.repo_list_model.filePath(i))
+            self.git_repo.index.commit(git_descr.textValue())
+
+    def git_push(self):
+        
+
+
 class EditorTab(QPlainTextEdit):
     """Editor text place"""
 
@@ -436,6 +505,16 @@ class EditorTab(QPlainTextEdit):
                         txt_1[-1] == '{' and txt_[cursor.position() - 1] == '}' or \
                         txt_1[-1] == '<' and txt_[cursor.position() - 1] == '>':
                     cursor.insertText(' ' * tab_sz + '\n')
+                elif '(' in txt_1 and txt_[cursor.position() - 1] == ')':
+                    cursor.insertText(' ' * len(txt_1.split('(')[0]) + ' ')
+                elif '[' in txt_1 and txt_[cursor.position() - 1] == ']':
+                    if tt := re.search(r'\S', txt_1):
+                        cursor.insertText(' ' * tt.start())
+                elif '{' in txt_1 and txt_[cursor.position() - 1] == '}':
+                    cursor.insertText(' ' * len(txt_1.split('[')[0]) + ' ')
+                elif '<' in txt_1 and txt_[cursor.position() - 1] == '>':
+                    if tt := re.search(r'\S', txt_1):
+                        cursor.insertText(' ' * tt.start())
             if (fa := re.findall(r'\b\S+\b', txt_1)) and fa[0] in self.highlighter.tab_words:
                 cursor.insertText(' ' * tab_sz)
             self.setTextCursor(cursor)
@@ -685,13 +764,13 @@ class IdeWindow(QMainWindow):
         self.git_menu: QMenu = QMenu('Git', self)
         self.menuBar().addMenu(self.git_menu)
 
+        self.git_open_btn: QAction = QAction('Open', self)
+        self.git_open_btn.triggered.connect(self.git_open)
+        self.git_menu.addAction(self.git_open_btn)
+
         self.git_init_btn: QAction = QAction('Init', self)
         self.git_init_btn.triggered.connect(self.git_init)
         self.git_menu.addAction(self.git_init_btn)
-
-        self.git_commit_btn: QAction = QAction('Commit', self)
-        self.git_commit_btn.triggered.connect(self.git_commit)
-        self.git_menu.addAction(self.git_commit_btn)
 
         self.git_clone_btn: QAction = QAction('Clone', self)
         self.git_clone_btn.triggered.connect(self.git_clone)
@@ -796,12 +875,16 @@ class IdeWindow(QMainWindow):
     def sel_tab(self) -> None:
         if self.editor_tabs.count():
             self.setWindowTitle(self.editor_tabs.tabText(self.editor_tabs.currentIndex()) + ' - Vcode')
-            d: list[str] = self.editor_tabs.currentWidget().file.split('/')
-            for _ in range(len(d)):
-                self.tree.setExpanded(self.model.index('/'.join(d)), True)
-                del d[-1]
-            self.tree.selectionModel().select(self.model.index(self.editor_tabs.currentWidget().file),
-                                              QItemSelectionModel.SelectionFlag.Select)
+            if type(self.editor_tabs.currentWidget()) == EditorTab:
+                d: list[str] = self.editor_tabs.currentWidget().file.split('/')
+                for _ in range(len(d)):
+                    self.tree.setExpanded(self.model.index('/'.join(d)), True)
+                    del d[-1]
+                self.tree.selectionModel().select(self.model.index(self.editor_tabs.currentWidget().file),
+                                                  QItemSelectionModel.SelectionFlag.Select)
+            else:
+                self.tree.selectionModel().select(self.model.index(self.editor_tabs.currentWidget().path),
+                                                  QItemSelectionModel.SelectionFlag.Select)
         else:
             self.setWindowTitle('Vcode')
 
@@ -841,18 +924,29 @@ class IdeWindow(QMainWindow):
             self.editor_tabs.setCurrentIndex(self.editor_tabs.insertTab(row, editor, editor.filename))
         self.editor_tabs.setTabToolTip(self.editor_tabs.currentIndex(), editor.file)
 
+    def add_git_tab(self, path: str, row: int | None = None) -> None:
+        if not isdir(path):
+            return
+        editor: GitTab = GitTab(path, self.exit_code)
+        if row is None:
+            self.editor_tabs.setCurrentIndex(self.editor_tabs.addTab(editor, path.split('/')[-1]))
+        else:
+            self.editor_tabs.setCurrentIndex(self.editor_tabs.insertTab(row, editor, path.split('/')[-1]))
+        self.editor_tabs.setTabToolTip(self.editor_tabs.currentIndex(), path)
+
     def close_tab(self, tab: int) -> None:
-        widget: EditorTab = self.editor_tabs.widget(tab)
-        if widget.saved_text != widget.toPlainText():
-            button: QMessageBox.StandardButton = QMessageBox.warning(
-                self, 'Warning', texts.save_warning[self.settings.value('Language')],
-                buttons=QMessageBox.StandardButton.Save | QMessageBox.StandardButton.Discard |
-                        QMessageBox.StandardButton.Cancel,
-                defaultButton=QMessageBox.StandardButton.Save)
-            if button == QMessageBox.StandardButton.Cancel:
-                return
-            elif button == QMessageBox.StandardButton.Save:
-                widget.save()
+        widget: EditorTab | GitTab = self.editor_tabs.widget(tab)
+        if type(widget) is EditorTab:
+            if widget.saved_text != widget.toPlainText():
+                button: QMessageBox.StandardButton = QMessageBox.warning(
+                    self, 'Warning', texts.save_warning[self.settings.value('Language')],
+                    buttons=QMessageBox.StandardButton.Save | QMessageBox.StandardButton.Discard |
+                            QMessageBox.StandardButton.Cancel,
+                    defaultButton=QMessageBox.StandardButton.Save)
+                if button == QMessageBox.StandardButton.Cancel:
+                    return
+                elif button == QMessageBox.StandardButton.Save:
+                    widget.save()
         self.editor_tabs.removeTab(tab)
         widget.deleteLater()
 
@@ -940,6 +1034,7 @@ class IdeWindow(QMainWindow):
                 process: subprocess.Popen = subprocess.Popen(f'process_{tid}.bat',
                                                              creationflags=subprocess.CREATE_NEW_CONSOLE,
                                                              process_group=subprocess.CREATE_NEW_PROCESS_GROUP)
+                SystemMonitor(process.pid)
                 process.wait()
                 os.remove(f'process_{tid}.bat')
             elif sys.platform.startswith('linux'):
@@ -1013,32 +1108,38 @@ class IdeWindow(QMainWindow):
             self.exit_code.setText('Git not installed')
             return False
 
-    def git_init(self):
+    def git_open(self):
         if self.git_check():
             path: str = QFileDialog.getExistingDirectory(directory=os.path.expanduser('~'))
             if path:
-                p: subprocess.Popen = subprocess.Popen(f'git init {path}',
+                '''p: subprocess.Popen = subprocess.Popen(f'git -C {path} status',
                                                        stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
                 p.wait()
                 if p.returncode:
                     self.exit_code.setText(p.stdout.read().decode(sys.stdin.encoding).strip())
                 else:
-                    self.exit_code.setText(f'Initialize repository {path}')
+                    self.add_git_tab(path)'''
+                try:
+                    if git.Repo(path).git_dir:
+                        self.add_git_tab(path)
+                except git.InvalidGitRepositoryError:
+                    self.exit_code.setText(f'Not git repo {path}')
 
-    def git_commit(self):
+    def git_init(self):
         if self.git_check():
-            git_descr: QInputDialog = QInputDialog(self)
-            git_descr.exec()
-            if git_descr.textValue():
-                path: str = QFileDialog.getExistingDirectory(directory=os.path.expanduser('~'))
-                if path:
-                    p: subprocess.Popen = subprocess.Popen(f'git commit -m "{git_descr.textValue()}" {path}',
-                                                           stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-                    p.wait()
-                    if p.returncode:
-                        self.exit_code.setText(p.stdout.read().decode(sys.stdin.encoding).strip())
-                    else:
-                        self.exit_code.setText(f'Commit repository {path}')
+            path: str = QFileDialog.getExistingDirectory(directory=os.path.expanduser('~'))
+            if path:
+                '''p: subprocess.Popen = subprocess.Popen(f'git init {path}',
+                                                       stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+                p.wait()
+                if p.returncode:
+                    self.exit_code.setText(p.stdout.read().decode(sys.stdin.encoding).strip())
+                else:
+                    self.add_git_tab(path)
+                    self.exit_code.setText(f'Initialize repository {path}')'''
+                git.Repo.init(path)
+                self.add_git_tab(path)
+                self.exit_code.setText(f'Initialize repository {path}')
 
     def git_clone(self):
         if self.git_check():
@@ -1047,13 +1148,14 @@ class IdeWindow(QMainWindow):
             if git_file.textValue():
                 path: str = QFileDialog.getExistingDirectory(directory=os.path.expanduser('~'))
                 if path:
-                    p: subprocess.Popen = subprocess.Popen(f'git clone {git_file.textValue()} {path}',
+                    '''p: subprocess.Popen = subprocess.Popen(f'git clone {git_file.textValue()} {path}',
                                                            stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
                     p.wait()
                     if p.returncode:
                         self.exit_code.setText(p.stdout.read().decode(sys.stdin.encoding).strip())
                     else:
-                        self.exit_code.setText(f'Clone repository {git_file.textValue()}')
+                        self.exit_code.setText(f'Clone repository {git_file.textValue()}')'''
+                    git.Repo.clone_from(git_file.textValue(), path)
 
     def dragEnterEvent(self, event: QDragEnterEvent) -> None:
         mime: QMimeData = event.mimeData()
@@ -1087,6 +1189,8 @@ class IdeWindow(QMainWindow):
         save_last: QSettings = QSettings('Vcode', 'Last')
         for tab in self.editor_tabs.findChildren(EditorTab):
             save_last.setValue('V' + tab.file, self.editor_tabs.indexOf(tab))
+        for tab in self.editor_tabs.findChildren(GitTab):
+            save_last.setValue('G' + tab.path, self.editor_tabs.indexOf(tab))
         save_last.setValue('current', self.editor_tabs.currentIndex())
         self.options.setValue('Splitter', self.splitter.sizes())
         if self.isMaximized():
@@ -1307,7 +1411,10 @@ if __name__ == '__main__':
         last: QSettings = QSettings('Vcode', 'Last')
         for n in last.allKeys():
             if n != 'current' and last.value(n) is not None:
-                ide.add_tab(n[1:], int(last.value(n)))
+                if n[0] == 'V':
+                    ide.add_tab(n[1:], int(last.value(n)))
+                elif n[0] == 'G':
+                    ide.add_git_tab(n[1:], int(last.value(n)))
             elif last.value('current') is not None:
                 ide.editor_tabs.setCurrentIndex(int(last.value('current')))
         last.clear()
