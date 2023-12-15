@@ -60,6 +60,22 @@ encodings: list[str] = ['ascii', 'big5', 'big5hkscs', 'cp037', 'cp1006', 'cp1026
 if exists(resource_path('languages.json')):
     with open(resource_path('languages.json')) as llf:
         language_list: dict[str, dict[str, str]] = json.load(llf)
+    if 'Python' not in language_list.keys():
+        language_list["Python"] = {
+            "highlight": "highlights/python.hl",
+            "file_formats": ["py", "pyw", "pyi"],
+            "start_command": "python \"{filename}\""
+        }
+        with open(resource_path('languages.json'), 'w') as llf:
+            json.dump(language_list, llf)
+    if 'Html' not in language_list.keys():
+        language_list["Html"] = {
+            "highlight": "highlights/html.hl",
+            "file_formats": ["htm", "html"],
+            "start_command": "start \"\" \"{filename}\""
+        }
+        with open(resource_path('languages.json'), 'w') as llf:
+            json.dump(language_list, llf)
 else:
     language_list: dict[str, dict[str, str]] = {
         "Python": {
@@ -80,6 +96,7 @@ else:
 class Highlighter(QSyntaxHighlighter):
     def __init__(self, highlight_path: str, parent: QTextDocument = None) -> None:
         super().__init__(parent)
+        self.path = highlight_path
         self.mapping: dict[str, QTextCharFormat] = {}
         self.tab_words: list[str] = []
         with open(highlight_path) as highlight_file:
@@ -116,11 +133,28 @@ class Highlighter(QSyntaxHighlighter):
                 self.setFormat(s, e - s, char)
 
 
+class InputDialog(QDialog):
+    def __init__(self, title: str, text: str, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.setWindowTitle(title)
+        self.l: QVBoxLayout = QVBoxLayout(self)
+        self.l.addWidget(QLabel(text, self))
+        self.le: QLineEdit = QLineEdit(self)
+        self.le.contextMenuEvent = LineEditMenu(self.le)
+        self.l.addWidget(self.le)
+        self.ok_btn: QPushButton = QPushButton('OK', self)
+        self.ok_btn.clicked.connect(self.accept)
+        self.l.addWidget(self.ok_btn, alignment=Qt.AlignmentFlag.AlignRight)
+
+    def text_value(self):
+        return self.le.text()
+
+
 class TextEditMenu(QMenu):
     """Custom QTextEdit Menu"""
 
     def __init__(self, parent: QTextEdit | QPlainTextEdit, *args, **kwargs) -> None:
-        super().__init__(*args, **kwargs)
+        super().__init__(parent=parent, *args, **kwargs)
         self.p: QTextEdit | QPlainTextEdit = parent
 
         self.undo: QAction = QAction(self)
@@ -194,11 +228,37 @@ class TextEditMenu(QMenu):
         self.popup(event.globalPos())
 
 
+class TextEditFullscreenMenu(TextEditMenu):
+    def __init__(self, parent: QTextEdit | QPlainTextEdit, *args, **kwargs) -> None:
+        super().__init__(parent=parent, *args, **kwargs)
+
+        self.addSeparator()
+        self.exit: QAction = QAction(self)
+        self.exit.triggered.connect(self.p.close)
+        self.exit.setShortcut('Alt+F4')
+        self.addAction(self.exit)
+
+    def __call__(self, event: QContextMenuEvent) -> None:
+        lang: str = self.lang_s.value('Language')
+        self.undo.setText(texts.undo[lang])
+        self.redo.setText(texts.redo[lang])
+        self.cut.setText(texts.cut[lang])
+        self.copy.setText(texts.copy[lang])
+        self.paste.setText(texts.paste[lang])
+        self.select_all.setText(texts.select_all[lang])
+        self.start.setText(texts.start_btn[lang])
+        self.search.setTitle(texts.search[lang])
+        self.search_in_g.setText(texts.search_in_g[lang])
+        self.search_in_so.setText(texts.search_in_so[lang])
+        self.exit.setText(texts.exit_presentation_btn[lang])
+        self.popup(event.globalPos())
+
+
 class TreeViewMenu(QMenu):
     """Custom QTreeView Menu"""
 
     def __init__(self, parent: QTreeView, parent_class, *args, **kwargs) -> None:
-        super().__init__(*args, **kwargs)
+        super().__init__(parent=parent, *args, **kwargs)
         self.p: QTreeView = parent
         self.c: IdeWindow = parent_class
 
@@ -238,13 +298,14 @@ class TreeViewMenu(QMenu):
         self.popup(event.globalPos())
 
     def new_file(self) -> None:
-        file: QInputDialog = QInputDialog(self)
+        file: InputDialog = InputDialog(texts.new_btn[self.lang_s.value('Language')],
+                                        texts.new_btn[self.lang_s.value('Language')], self)
         file.exec()
-        if file.textValue():
-            if file.textValue().endswith(('/', '\\')):
-                os.mkdir(self.c.model.filePath(self.c.tree.selectedIndexes()[0]) + '/' + file.textValue())
+        if file.text_value():
+            if file.text_value().endswith(('/', '\\')):
+                os.mkdir(self.c.model.filePath(self.c.tree.selectedIndexes()[0]) + '/' + file.text_value())
             else:
-                x: str = self.c.model.filePath(self.c.tree.selectedIndexes()[0]) + '/' + file.textValue()
+                x: str = self.c.model.filePath(self.c.tree.selectedIndexes()[0]) + '/' + file.text_value()
                 open(x, 'w', encoding=self.lang_s.value('Encoding')).close()
                 self.c.add_tab(x)
 
@@ -270,13 +331,14 @@ class TreeViewMenu(QMenu):
             shutil.rmtree(n)
 
     def rename_file(self) -> None:
-        file: QInputDialog = QInputDialog(self)
+        file: InputDialog = InputDialog(texts.rename_btn[self.lang_s.value('Language')],
+                                        texts.rename_btn[self.lang_s.value('Language')], self)
         path, name = self.c.model.filePath(self.c.tree.selectedIndexes()[0]).rsplit('/', maxsplit=1)
-        file.setTextValue(name)
+        file.le.setText(name)
         file.exec()
-        if file.textValue() != name:
+        if file.text_value() != name:
             try:
-                os.rename(path + '/' + name, path + '/' + file.textValue())
+                os.rename(path + '/' + name, path + '/' + file.text_value())
             except Exception:
                 pass
 
@@ -285,7 +347,7 @@ class LineEditMenu(QMenu):
     """Custom QLineEdit QMenu"""
 
     def __init__(self, parent: QLineEdit, *args, **kwargs) -> None:
-        super().__init__(*args, **kwargs)
+        super().__init__(parent=parent, *args, **kwargs)
         self.p: QLineEdit = parent
 
         self.undo: QAction = QAction(self)
@@ -334,20 +396,63 @@ class LineEditMenu(QMenu):
         self.popup(event.globalPos())
 
 
-class SystemMonitor(QWidget):
-    def __init__(self, pid: int):
-        super().__init__()
-        while True:
-            print(psutil.Process(pid).cpu_percent())
+class SystemMonitor(QDialog):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.setWindowTitle('Vcode System monitor')
+        self.setMinimumSize(300, 200)
+        self.lay = QVBoxLayout(self)
+        self.setLayout(self.lay)
+
+        self.ide_process: psutil.Process = psutil.Process(os.getpid())
+        self.list_processes: list[psutil.Process] = []
+
+        self.processor = QProgressBar(self)
+        self.processor.setObjectName('monitor')
+        self.processor.setFormat('CPU usage: %p%')
+        self.lay.addWidget(self.processor)
+
+        self.ram = QProgressBar(self)
+        self.ram.setObjectName('monitor')
+        self.ram.setFormat('Memory usage: %p% - %v MB')
+        self.ram.setMaximum(self.bytes_to_mb(psutil.virtual_memory().total))
+        self.lay.addWidget(self.ram)
+
+        self.ide = QProgressBar(self)
+        self.ide.setObjectName('monitor')
+        self.ide.setFormat('Vcode memory usage: %p% - %v MB')
+        self.ide.setMaximum(self.bytes_to_mb(psutil.virtual_memory().total))
+        self.lay.addWidget(self.ide)
+
+        self.monitor()
+
+        self.timer: QTimer = QTimer(self)
+        self.timer.setInterval(1000)
+        self.timer.timeout.connect(self.monitor)
+        self.timer.start()
+
+    def monitor(self):
+        self.processor.setValue(int(psutil.cpu_percent()))
+        self.ram.setValue(self.bytes_to_mb(psutil.virtual_memory().used))
+        self.ide.setValue(self.bytes_to_mb(self.ide_process.memory_info().rss))
+        # print('Memory usage: {} MB'.format(self.bytes_to_mb(self.ide_process.memory_info().rss)))
+
+    @staticmethod
+    def bytes_to_mb(a: int | float) -> int:
+        return int(a / 1024 / 1024)
+
+    def closeEvent(self, a0: QCloseEvent) -> None:
+        self.timer.stop()
 
 
 class GitTab(QWidget):
-    def __init__(self, path: str, parent_exit_code_label: QLabel | None = None):
+    def __init__(self, path: str, parent_exit_code_label: QLabel | None = None, parent=None):
         if not self.git_check():
             raise Exception('Git not installed')
-        super().__init__()
+        super().__init__(parent=parent)
+        self.p: IdeWindow = parent
         self.path: str = path
-
+        self.l_s: QSettings = QSettings('Vcode', 'Settings')
         if parent_exit_code_label is not None:
             self.exit_code: QLabel = parent_exit_code_label
         else:
@@ -356,6 +461,16 @@ class GitTab(QWidget):
         self.git_repo: git.Repo = git.Repo(path)
 
         self.lay: QGridLayout = QGridLayout(self)
+        self.bar: QToolBar = QToolBar(self)
+        self.lay.addWidget(self.bar)
+
+        self.commit: QAction = QAction('Commit', self)
+        self.commit.triggered.connect(self.git_commit)
+        self.bar.addAction(self.commit)
+
+        self.push: QAction = QAction('Push', self)
+        self.push.triggered.connect(self.git_push)
+        self.bar.addAction(self.push)
 
         self.branch: QComboBox = QComboBox(self)
         self.branch.addItems([i.name for i in self.git_repo.branches])
@@ -369,6 +484,7 @@ class GitTab(QWidget):
         self.repo_list_model.setRootPath(path)
         self.repo_list.setModel(self.repo_list_model)
         self.repo_list.setRootIndex(self.repo_list_model.index(path))
+        self.repo_list.doubleClicked.connect(lambda x: self.p.add_tab(self.repo_list_model.filePath(x)))
         self.lay.addWidget(self.repo_list)
 
     def git_check(self):
@@ -383,20 +499,17 @@ class GitTab(QWidget):
         self.git_repo.head.reference = branch
         self.git_repo.head.reset(working_tree=True)
 
+    def git_merge(self):
+        self.git_repo.merge_base()
+
     def git_commit(self):
-        git_descr: QInputDialog = QInputDialog(self)
+        git_descr: InputDialog = InputDialog(texts.rename_btn[self.l_s.value('Language')],
+                                             texts.rename_btn[self.l_s.value('Language')], self)
         git_descr.exec()
-        if git_descr.textValue():
-            '''p: subprocess.Popen = subprocess.Popen(f'git commit -m "{git_descr.textValue()}" {self.path}',
-                                                   stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-            p.wait()
-            if p.returncode:
-                self.exit_code.setText(p.stdout.read().decode(sys.stdin.encoding).strip())
-            else:
-                self.exit_code.setText(f'Commit repository {self.path}')'''
+        if git_descr.text_value():
             for i in self.repo_list.selectedIndexes():
                 self.git_repo.index.add(self.repo_list_model.filePath(i))
-            self.git_repo.index.commit(git_descr.textValue())
+            self.git_repo.index.commit(git_descr.text_value())
 
     def git_push(self):
         self.git_repo.remotes.origin.push()
@@ -405,9 +518,8 @@ class GitTab(QWidget):
 class EditorTab(QPlainTextEdit):
     """Editor text place"""
 
-    def __init__(self, file: str, parent: QWidget = None, *args, **kwargs) -> None:
-        super().__init__(parent, *args, **kwargs)
-        self.p: QWidget = parent
+    def __init__(self, file: str, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
 
         self.line_num: LineNumberArea = LineNumberArea(self)
         self.blockCountChanged.connect(self.update_line_number_area_width)
@@ -605,7 +717,7 @@ class EditorTab(QPlainTextEdit):
     def dropEvent(self, e: QDropEvent) -> None:
         mime: QMimeData = e.mimeData()
         if mime.hasUrls():
-            self.p.dropEvent(e)
+            self.parent().dropEvent(e)
         elif mime.hasText():
             super().dropEvent(e)
         else:
@@ -615,7 +727,7 @@ class EditorTab(QPlainTextEdit):
 class LineNumberArea(QWidget):
     """Area for numbers of lines"""
 
-    def __init__(self, editor: EditorTab):
+    def __init__(self, editor: EditorTab) -> None:
         super().__init__(editor)
         self.editor: EditorTab = editor
 
@@ -644,7 +756,7 @@ class TabWidget(QTabWidget):
 class HighlightMakerString(QWidget):
     """Editor string for highlight maker"""
 
-    def __init__(self, rstring, params) -> None:
+    def __init__(self, rstring: str, params: str) -> None:
         super().__init__()
         layout: QHBoxLayout = QHBoxLayout()
         self.setLayout(layout)
@@ -672,8 +784,6 @@ class IdeWindow(QMainWindow):
 
         self.settings: QSettings = QSettings('Vcode', 'Settings')
         self.options: QSettings = QSettings('Vcode', 'Options')
-
-        self.about_window: AboutDialog = AboutDialog(self)
 
         self.settings_window: SettingsDialog = SettingsDialog(self)
         for st in STYLE.keys():
@@ -716,10 +826,6 @@ class IdeWindow(QMainWindow):
         self.start_btn.triggered.connect(self.start_program)
         self.tool_bar.addAction(self.start_btn)
 
-        self.terminal_btn: QAction = QAction(self)
-        self.terminal_btn.triggered.connect(self.start_terminal)
-        self.tool_bar.addAction(self.terminal_btn)
-
         self.tool_bar.addSeparator()
         self.exit_code: QLabel = QLabel('-')
         self.exit_code.setObjectName('exit_code')
@@ -757,6 +863,23 @@ class IdeWindow(QMainWindow):
         self.save_as_btn.triggered.connect(self.save_as)
         self.file_menu.addAction(self.save_as_btn)
 
+        self.view_menu: QMenu = QMenu(self)
+        self.menuBar().addMenu(self.view_menu)
+
+        self.terminal_btn: QAction = QAction(self)
+        self.terminal_btn.setShortcut('Ctrl+T')
+        self.terminal_btn.triggered.connect(self.start_terminal)
+        self.view_menu.addAction(self.terminal_btn)
+
+        self.monitor_btn: QAction = QAction(self)
+        self.monitor_btn.triggered.connect(self.show_monitor)
+        self.view_menu.addAction(self.monitor_btn)
+
+        self.presentation_btn: QAction = QAction(self)
+        self.presentation_btn.setShortcut('Ctrl+F11')
+        self.presentation_btn.triggered.connect(self.presentation_mode)
+        self.view_menu.addAction(self.presentation_btn)
+
         self.settings_btn: QAction = QAction(self)
         self.settings_btn.triggered.connect(self.settings_window.exec)
         self.menuBar().addAction(self.settings_btn)
@@ -780,7 +903,7 @@ class IdeWindow(QMainWindow):
         self.menuBar().addMenu(self.about_menu)
 
         self.about_btn: QAction = QAction(self)
-        self.about_btn.triggered.connect(self.about_window.exec)
+        self.about_btn.triggered.connect(AboutDialog(self).exec)
         self.about_menu.addAction(self.about_btn)
 
         self.feedback_btn: QAction = QAction(self)
@@ -851,6 +974,10 @@ class IdeWindow(QMainWindow):
         self.settings_window.font_size.setValue(self.settings.value('Font').pointSize())
         self.settings_window.font_size.valueChanged.connect(self.select_font)
 
+        self.show_ide()
+        self.check_updates()
+
+    def show_ide(self) -> None:
         if self.options.value('Geometry') == 'Maximized':
             self.showMaximized()
         elif self.options.value('Geometry') == 'Not init':
@@ -859,8 +986,6 @@ class IdeWindow(QMainWindow):
         else:
             self.setGeometry(self.options.value('Geometry'))
             self.show()
-
-        self.check_updates()
 
     def check_updates(self) -> None:
         def check():
@@ -871,6 +996,9 @@ class IdeWindow(QMainWindow):
                 pass
 
         threading.Thread(target=check).start()
+
+    def show_monitor(self) -> None:
+        SystemMonitor(self).show()
 
     def sel_tab(self) -> None:
         if self.editor_tabs.count():
@@ -927,7 +1055,7 @@ class IdeWindow(QMainWindow):
     def add_git_tab(self, path: str, row: int | None = None) -> None:
         if not isdir(path):
             return
-        editor: GitTab = GitTab(path, self.exit_code)
+        editor: GitTab = GitTab(path, self.exit_code, self)
         if row is None:
             self.editor_tabs.setCurrentIndex(self.editor_tabs.addTab(editor, path.split('/')[-1]))
         else:
@@ -950,10 +1078,33 @@ class IdeWindow(QMainWindow):
         self.editor_tabs.removeTab(tab)
         widget.deleteLater()
 
+    def presentation_mode(self) -> None:
+        tab: EditorTab | GitTab | None = self.editor_tabs.currentWidget()
+        if type(tab) is EditorTab:
+            editor: EditorTab = EditorTab(tab.file, self)
+            editor.setWindowFlag(Qt.WindowType.Window)
+            editor.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
+            font: QFont = self.settings.value('Font')
+            font.setPointSize(font.pointSize() * 2)
+            editor.setFont(font)
+            editor.contextMenuEvent = TextEditFullscreenMenu(editor)
+            c: QTextCursor = editor.textCursor()
+            c.movePosition(QTextCursor.MoveOperation.End)
+            editor.setTextCursor(c)
+            editor.setFocus()
+            editor.cursorPositionChanged.connect(editor.highlight_current_line)
+            editor.textChanged.connect(lambda: tab.setPlainText(editor.toPlainText()))
+            if tab.highlighter is not None:
+                editor.set_highlighter(Highlighter(tab.highlighter.path))
+            editor.setWindowTitle(tab.filename)
+            editor.showFullScreen()
+            self.hide()
+            editor.closeEvent = lambda e: self.show_ide()
+
     def select_language(self, language: str) -> None:
         self.settings.setValue('Language', language)
 
-        self.settings_window.setWindowTitle(texts.settings_window[language])
+        self.settings_window.setWindowTitle(texts.settings_btn[language])
         self.editor_tabs.empty_widget.setText(texts.open_btn[language])
 
         self.file_menu.setTitle(texts.file_menu[language])
@@ -968,6 +1119,9 @@ class IdeWindow(QMainWindow):
         self.about_btn.setText(texts.about_btn[language])
         self.feedback_btn.setText(texts.feedback_btn[language])
         self.download_btn.setText(texts.download_btn[language])
+        self.view_menu.setTitle(texts.view_btn[language])
+        self.monitor_btn.setText(texts.monitor_btn[language])
+        self.presentation_btn.setText(texts.presentation_btn[language])
 
         self.settings_window.autorun.setText(texts.autorun[language])
         self.settings_window.autosave.setText(texts.autosave[language])
@@ -1034,7 +1188,6 @@ class IdeWindow(QMainWindow):
                 process: subprocess.Popen = subprocess.Popen(f'process_{tid}.bat',
                                                              creationflags=subprocess.CREATE_NEW_CONSOLE,
                                                              process_group=subprocess.CREATE_NEW_PROCESS_GROUP)
-                SystemMonitor(process.pid)
                 process.wait()
                 os.remove(f'process_{tid}.bat')
             elif sys.platform.startswith('linux'):
@@ -1100,7 +1253,7 @@ class IdeWindow(QMainWindow):
             self.editor_tabs.currentWidget().saved_text = self.editor_tabs.currentWidget().toPlainText()
             self.editor_tabs.currentWidget().save()
 
-    def git_check(self):
+    def git_check(self) -> bool:
         try:
             subprocess.run('git -v')
             return True
@@ -1108,54 +1261,32 @@ class IdeWindow(QMainWindow):
             self.exit_code.setText('Git not installed')
             return False
 
-    def git_open(self):
+    def git_open(self) -> None:
         if self.git_check():
             path: str = QFileDialog.getExistingDirectory(directory=os.path.expanduser('~'))
             if path:
-                '''p: subprocess.Popen = subprocess.Popen(f'git -C {path} status',
-                                                       stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-                p.wait()
-                if p.returncode:
-                    self.exit_code.setText(p.stdout.read().decode(sys.stdin.encoding).strip())
-                else:
-                    self.add_git_tab(path)'''
                 try:
                     if git.Repo(path).git_dir:
                         self.add_git_tab(path)
                 except git.InvalidGitRepositoryError:
                     self.exit_code.setText(f'Not git repo {path}')
 
-    def git_init(self):
+    def git_init(self) -> None:
         if self.git_check():
             path: str = QFileDialog.getExistingDirectory(directory=os.path.expanduser('~'))
             if path:
-                '''p: subprocess.Popen = subprocess.Popen(f'git init {path}',
-                                                       stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-                p.wait()
-                if p.returncode:
-                    self.exit_code.setText(p.stdout.read().decode(sys.stdin.encoding).strip())
-                else:
-                    self.add_git_tab(path)
-                    self.exit_code.setText(f'Initialize repository {path}')'''
                 git.Repo.init(path)
                 self.add_git_tab(path)
                 self.exit_code.setText(f'Initialize repository {path}')
 
-    def git_clone(self):
+    def git_clone(self) -> None:
         if self.git_check():
-            git_file: QInputDialog = QInputDialog(self)
+            git_file: InputDialog = InputDialog('File', 'File', self)
             git_file.exec()
-            if git_file.textValue():
+            if git_file.text_value():
                 path: str = QFileDialog.getExistingDirectory(directory=os.path.expanduser('~'))
                 if path:
-                    '''p: subprocess.Popen = subprocess.Popen(f'git clone {git_file.textValue()} {path}',
-                                                           stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-                    p.wait()
-                    if p.returncode:
-                        self.exit_code.setText(p.stdout.read().decode(sys.stdin.encoding).strip())
-                    else:
-                        self.exit_code.setText(f'Clone repository {git_file.textValue()}')'''
-                    git.Repo.clone_from(git_file.textValue(), path)
+                    git.Repo.clone_from(git_file.text_value(), path)
 
     def dragEnterEvent(self, event: QDragEnterEvent) -> None:
         mime: QMimeData = event.mimeData()
@@ -1269,7 +1400,7 @@ class SettingsDialog(QDialog):
         self.add_btn.triggered.connect(self.add_language)
 
     def language_settings(self) -> None:
-        lsd: LanguageSettingsDialog = LanguageSettingsDialog(self.languages_list.currentItem().text())
+        lsd: LanguageSettingsDialog = LanguageSettingsDialog(self.languages_list.currentItem().text(), self)
         lsd.setWindowTitle(f'{self.languages_list.currentItem().text()} - Vcode languages')
         lsd.exec()
 
@@ -1279,6 +1410,8 @@ class SettingsDialog(QDialog):
         if item:
             self.remove_btn.setText(texts.remove_btn[QSettings('Vcode', 'Settings').value('Language')])
             menu.addAction(self.remove_btn)
+            if item.text() in ['Python', 'Html']:
+                menu.setEnabled(False)
         else:
             self.add_btn.setText(texts.add_btn[QSettings('Vcode', 'Settings').value('Language')])
             menu.addAction(self.add_btn)
@@ -1292,13 +1425,13 @@ class SettingsDialog(QDialog):
         self.languages_list.takeItem(self.languages_list.row(name))
 
     def add_language(self) -> None:
-        name: QInputDialog = QInputDialog(self)
+        name: InputDialog = InputDialog('Name', 'Enter name:', self)
         name.exec()
-        if name.textValue():
-            language_list[name.textValue()] = {"highlight": "", "file_formats": [], "start_command": ""}
+        if name.text_value():
+            language_list[name.text_value()] = {"highlight": "", "file_formats": [], "start_command": ""}
             with open(resource_path('languages.json'), 'w') as llfw:
                 json.dump(language_list, llfw)
-        self.languages_list.addItem(QListWidgetItem(name.textValue(), self.languages_list))
+        self.languages_list.addItem(QListWidgetItem(name.text_value(), self.languages_list))
 
 
 class AboutDialog(QDialog):
@@ -1331,21 +1464,25 @@ class LanguageSettingsDialog(QDialog):
 
     def __init__(self, language: str, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
+        self.setMinimumSize(350, 150)
         self.language: str = language
         layout: QGridLayout = QGridLayout(self)
         self.setLayout(layout)
         self.lang_s: QSettings = QSettings('Vcode', 'Settings')
 
         self.highlight: QLineEdit = QLineEdit(language_list[self.language]['highlight'], self)
-        self.file_formats: QLineEdit = QLineEdit(' '.join(language_list[self.language]['file_formats']), self)
-        self.start_command: QLineEdit = QLineEdit(language_list[self.language]['start_command'], self)
-
+        self.highlight.setPlaceholderText('Highlight file path')
         self.highlight.contextMenuEvent = LineEditMenu(self.highlight)
-        self.file_formats.contextMenuEvent = LineEditMenu(self.file_formats)
-        self.start_command.contextMenuEvent = LineEditMenu(self.start_command)
-
         layout.addWidget(self.highlight, 0, 0, 1, 2)
+
+        self.file_formats: QLineEdit = QLineEdit(' '.join(language_list[self.language]['file_formats']), self)
+        self.file_formats.setPlaceholderText('Supported file formats')
+        self.file_formats.contextMenuEvent = LineEditMenu(self.file_formats)
         layout.addWidget(self.file_formats, 1, 0, 1, 2)
+
+        self.start_command: QLineEdit = QLineEdit(language_list[self.language]['start_command'], self)
+        self.start_command.setPlaceholderText('Start command')
+        self.start_command.contextMenuEvent = LineEditMenu(self.start_command)
         layout.addWidget(self.start_command, 2, 0, 1, 2)
 
         self.edit_highlight_btn: QPushButton = QPushButton(texts.edit_highlight_btn[self.lang_s.value('Language')],
@@ -1358,7 +1495,7 @@ class LanguageSettingsDialog(QDialog):
         layout.addWidget(self.save_btn, 3, 1, 1, 1)
 
     def highlight_maker_call(self) -> None:
-        hlm: HighlightMaker = HighlightMaker(language_list[self.language]['highlight'])
+        hlm: HighlightMaker = HighlightMaker(language_list[self.language]['highlight'], self)
         hlm.setWindowTitle(f'{language_list[self.language]["highlight"].split("/")[-1]} - Vcode highlight maker')
         hlm.exec()
 
@@ -1375,6 +1512,7 @@ class HighlightMaker(QDialog):
 
     def __init__(self, highlighter: str, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
+        self.setMinimumSize(300, 300)
         self.highlighter: str = highlighter
         layout: QGridLayout = QGridLayout(self)
         self.layout_hl: QVBoxLayout = QVBoxLayout()

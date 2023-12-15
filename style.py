@@ -80,6 +80,27 @@ STYLE = {
         QAbstractButton:hover {
             background-color: rgb(90, 90, 100);
         }
+        QLineEdit {
+            color: white;
+            border-radius: 6px;
+            border-width: 2px;
+            border-color: rgb(60, 60, 90);
+            border-style: solid;
+            background-color: rgb(65, 65, 75);
+            height: 1.8em;
+            width: 10em;
+        }
+        QLineEdit:hover {
+            background-color: rgb(85, 85, 90);
+        }
+        #monitor {
+            text-align: center;
+            border: 1px;
+            background-color: rgb(90, 90, 100);
+        }
+        #monitor:chunk {
+            background-color: rgb(45, 45, 54);
+        }
         #exit_code {
             font-size: 18px;
         }
@@ -132,6 +153,38 @@ STYLE = {
             background-color: rgb(220, 220, 190);
         }
         QComboBox QAbstractItemView::item:hover, QComboBox QAbstractItemView::item:selected {
+            background-color: rgb(185, 185, 174);
+        }
+        QPushButton {
+            border-radius: 6px;
+            border-width: 2px;
+            border-color: rgb(60, 60, 90);
+            border-style: solid;
+            background-color: rgb(220, 220, 190);
+            height: 1.8em;
+            width: 4.2em;
+        }
+        QAbstractButton:hover {
+            background-color: rgb(185, 185, 174);
+        }
+        QLineEdit {
+            border-radius: 6px;
+            border-width: 2px;
+            border-color: rgb(60, 60, 90);
+            border-style: solid;
+            background-color: rgb(220, 220, 190);
+            height: 1.8em;
+            width: 10em;
+        }
+        QLineEdit:hover {
+            background-color: rgb(185, 185, 174);
+        }
+        #monitor {
+            text-align: center;
+            border: 1px;
+            background-color: rgb(215, 215, 195);
+        }
+        #monitor:chunk {
             background-color: rgb(185, 185, 174);
         }
         #exit_code {
@@ -212,6 +265,27 @@ STYLE = {
         }
         QAbstractButton:hover {
             background-color: rgb(5, 5, 5);
+        }
+        QLineEdit {
+            color: white;
+            border-radius: 6px;
+            border-width: 2px;
+            border-color: rgb(200, 200, 200);
+            border-style: solid;
+            background-color: rgb(2, 2, 2);
+            height: 1.8em;
+            width: 10em;
+        }
+        QLineEdit:hover {
+            background-color: rgb(5, 5, 5);
+        }
+        #monitor {
+            text-align: center;
+            border: 1px;
+            background-color: rgb(10, 10, 10);
+        }
+        #monitor:chunk {
+            background-color: rgb(25, 25, 25);
         }
         #exit_code {
             font-size: 18px;

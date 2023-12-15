@@ -1,5 +1,3 @@
-settings_window = {'en': 'Settings', 'ru': 'Настройки', 'de': 'Einstellungen', 'ch': '设置'}
-
 file_menu = {'en': 'File', 'ru': 'Файл', 'de': 'Datei', 'ch': '文件'}
 new_btn = {'en': 'New', 'ru': 'Создать', 'de': 'Erstellen', 'ch': '创造'}
 open_btn = {'en': 'Open', 'ru': 'Открыть', 'de': 'Offen', 'ch': '打开'}
@@ -18,6 +16,11 @@ edit_highlight_btn = {'en': 'Edit highlight', 'ru': 'Редактировать 
                       'ch': '编辑突出显示'}
 remove_btn = {'en': 'Remove', 'ru': 'Удалить', 'de': 'Löschen', 'ch': '删除'}
 download_btn = {'en': 'Update Vcode', 'ru': 'Обновить Vcode', 'de': 'Vcode aktualisieren', 'ch': '更新Vcode'}
+view_btn = {'en': 'View', 'ru': 'Окна', 'de': 'Sicht', 'ch': '看法'}
+monitor_btn = {'en': 'System monitor', 'ru': 'Системный монитор', 'de': 'Systemmonitor', 'ch': '系统监控'}
+presentation_btn = {'en': 'Presentation mode', 'ru': 'Режим презентации', 'de': 'Präsentationsmodus', 'ch': '演示模式'}
+exit_presentation_btn = {'en': 'Exit presentation', 'ru': 'Выйти из презентации', 'de': 'Präsentation beenden',
+                         'ch': '退出演示'}
 
 autorun = {'en': 'Autorun', 'ru': 'Автозагрузка', 'de': 'Automatisch laden', 'ch': '自动加载'}
 autosave = {'en': 'Autosave', 'ru': 'Автосохранение', 'de': 'Automatisches Speichern', 'ch': '自动保存'}
