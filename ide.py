@@ -1,4 +1,3 @@
-import os
 import sys
 import subprocess
 import threading
@@ -6,6 +5,7 @@ import re
 import json
 import shutil
 from webbrowser import open as openweb
+from os import mkdir, system, remove, getpid, rename
 from os.path import isfile, isdir, dirname, abspath, join, exists, expanduser
 from requests import get
 import psutil
@@ -18,14 +18,16 @@ from PyQt6.QtGui import *
 import texts
 from style import STYLE
 
-VERSION = '0.6.0'
+VERSION: str = '0.6.0'
 
 
 def resource_path(relative_path: str) -> str:
+    """Return absolute path of file"""
     return join(getattr(sys, '_MEIPASS', dirname(abspath(sys.argv[0]))), relative_path)
 
 
 def set_autorun(enabled: bool) -> None:
+    """Set program autorun on start operating system (only for Windows)"""
     if sys.platform == 'win32':
         from winreg import HKEYType, HKEY_CURRENT_USER, KEY_ALL_ACCESS, REG_SZ, OpenKey, SetValueEx, DeleteValue
         key: HKEYType = OpenKey(HKEY_CURRENT_USER, 'SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run',
@@ -38,12 +40,14 @@ def set_autorun(enabled: bool) -> None:
 
 
 def update_filters() -> list[str]:
+    """Add filters for file searching"""
     filters_f: list = ['All Files (*.*)']
     for i, j in language_list.items():
         filters_f.append(f'{i} Files (*.{" *.".join(j["file_formats"])})')
     return filters_f
 
 
+user: str = expanduser('~')
 encodings: list[str] = ['ascii', 'big5', 'big5hkscs', 'cp037', 'cp1006', 'cp1026', 'cp1125', 'cp1140', 'cp1250',
                         'cp1251', 'cp1252', 'cp1253', 'cp1254', 'cp1255', 'cp1256', 'cp1257', 'cp1258', 'cp273',
                         'cp424', 'cp437', 'cp500', 'cp720', 'cp737', 'cp775', 'cp850', 'cp852', 'cp855', 'cp856',
@@ -57,46 +61,38 @@ encodings: list[str] = ['ascii', 'big5', 'big5hkscs', 'cp037', 'cp1006', 'cp1026
                         'mac-roman', 'mac-turkish', 'ptcp154', 'shift_jis', 'shift_jis_2004', 'shift_jisx0213',
                         'utf-16', 'utf-16-be', 'utf-16-le', 'utf-32', 'utf-32-be', 'utf-32-le', 'utf-7', 'utf-8',
                         'utf-8-sig']
-if exists(resource_path('languages.json')):
-    with open(resource_path('languages.json')) as llf:
+if exists(user + '/.Vcode/'):
+    with open(user + '/.Vcode/languages.json') as llf:
         language_list: dict[str, dict[str, str]] = json.load(llf)
     if 'Python' not in language_list.keys():
-        language_list["Python"] = {
-            "highlight": "highlights/python.hl",
-            "file_formats": ["py", "pyw", "pyi"],
-            "start_command": "python \"{filename}\""
-        }
-        with open(resource_path('languages.json'), 'w') as llf:
+        from default import python_ll
+        language_list["Python"] = python_ll
+        with open(user + '/.Vcode/languages.json', 'w') as llf:
             json.dump(language_list, llf)
     if 'Html' not in language_list.keys():
-        language_list["Html"] = {
-            "highlight": "highlights/html.hl",
-            "file_formats": ["htm", "html"],
-            "start_command": "start \"\" \"{filename}\""
-        }
-        with open(resource_path('languages.json'), 'w') as llf:
+        from default import html_ll
+        language_list["Html"] = html_ll
+        with open(user + '/.Vcode/languages.json', 'w') as llf:
             json.dump(language_list, llf)
 else:
-    language_list: dict[str, dict[str, str]] = {
-        "Python": {
-            "highlight": "highlights/python.hl",
-            "file_formats": ["py", "pyw", "pyi"],
-            "start_command": "python \"{filename}\""
-        },
-        "Html": {
-            "highlight": "highlights/html.hl",
-            "file_formats": ["htm", "html"],
-            "start_command": "start \"\" \"{filename}\""
-        }
-    }
-    with open(resource_path('languages.json'), 'w') as llf:
+    from default import *
+    language_list: dict[str, dict[str, str]] = {"Python": python_ll, "Html": html_ll}
+    mkdir(user + '/.Vcode/')
+    with open(user + '/.Vcode/languages.json', 'w') as llf:
         json.dump(language_list, llf)
+    mkdir(user + '/.Vcode/highlights')
+    with open(user + '/.Vcode/highlights/python.hl', 'w') as llf:
+        llf.write(python_hl)
+    with open(user + '/.Vcode/highlights/html.hl', 'w') as llf:
+        llf.write(html_hl)
 
 
 class Highlighter(QSyntaxHighlighter):
-    def __init__(self, highlight_path: str, parent: QTextDocument = None) -> None:
+    """Highlighter for code"""
+
+    def __init__(self, highlight_path: str, parent: QTextDocument | None = None) -> None:
         super().__init__(parent)
-        self.path = highlight_path
+        self.path: str = highlight_path
         self.mapping: dict[str, QTextCharFormat] = {}
         self.tab_words: list[str] = []
         with open(highlight_path) as highlight_file:
@@ -134,7 +130,9 @@ class Highlighter(QSyntaxHighlighter):
 
 
 class InputDialog(QDialog):
-    def __init__(self, title: str, text: str, *args, **kwargs):
+    """Custom QInputDialog"""
+
+    def __init__(self, title: str, text: str, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self.setWindowTitle(title)
         self.l: QVBoxLayout = QVBoxLayout(self)
@@ -146,8 +144,32 @@ class InputDialog(QDialog):
         self.ok_btn.clicked.connect(self.accept)
         self.l.addWidget(self.ok_btn, alignment=Qt.AlignmentFlag.AlignRight)
 
-    def text_value(self):
+    def text_value(self) -> str:
+        """Returns entered text"""
         return self.le.text()
+
+
+class WarningMessageBox(QMessageBox):
+    """Custom QMessageBox"""
+
+    def __init__(self, parent: QWidget, title: str, text_all_lang: dict[str, str]) -> None:
+        super().__init__(parent=parent)
+        lang: str = QSettings('Vcode', 'Settings').value('Language')
+        self.setWindowTitle(title)
+        self.setText(text_all_lang[lang])
+        self.setStandardButtons(self.StandardButton.Save | self.StandardButton.Discard | self.StandardButton.Cancel)
+        self.setDefaultButton(self.StandardButton.Save)
+
+        self.button(self.StandardButton.Save).setText(texts.save_btn[lang])
+        self.button(self.StandardButton.Discard).setText(texts.discard_btn[lang])
+        self.button(self.StandardButton.Cancel).setText(texts.cancel_btn[lang])
+
+        self.setWindowModality(Qt.WindowModality.ApplicationModal)
+
+    def wait(self) -> str:
+        """Start GUI, wait exit and return clicked button"""
+        self.exec()
+        return self.clickedButton().text()
 
 
 class TextEditMenu(QMenu):
@@ -229,10 +251,27 @@ class TextEditMenu(QMenu):
 
 
 class TextEditFullscreenMenu(TextEditMenu):
+    """TextEditMenu for presentation mode"""
+
     def __init__(self, parent: QTextEdit | QPlainTextEdit, *args, **kwargs) -> None:
         super().__init__(parent=parent, *args, **kwargs)
 
         self.addSeparator()
+
+        self.coef: QMenu = QMenu(self)
+        self.addMenu(self.coef)
+        self.coef_group: QActionGroup = QActionGroup(self.coef)
+        self.coef_group.setExclusive(True)
+        self.coef_group.triggered.connect(self.coef_triggered)
+        for s in ['100%', '125%', '150%', '175%', '200%', '250%', '300%']:
+            act: QAction = QAction(s, self)
+            act.setCheckable(True)
+            if s == '200%':
+                act.setChecked(True)
+                self.coef_triggered(act)
+            self.coef_group.addAction(act)
+        self.coef.addActions(self.coef_group.actions())
+
         self.exit: QAction = QAction(self)
         self.exit.triggered.connect(self.p.close)
         self.exit.setShortcut('Alt+F4')
@@ -240,18 +279,14 @@ class TextEditFullscreenMenu(TextEditMenu):
 
     def __call__(self, event: QContextMenuEvent) -> None:
         lang: str = self.lang_s.value('Language')
-        self.undo.setText(texts.undo[lang])
-        self.redo.setText(texts.redo[lang])
-        self.cut.setText(texts.cut[lang])
-        self.copy.setText(texts.copy[lang])
-        self.paste.setText(texts.paste[lang])
-        self.select_all.setText(texts.select_all[lang])
-        self.start.setText(texts.start_btn[lang])
-        self.search.setTitle(texts.search[lang])
-        self.search_in_g.setText(texts.search_in_g[lang])
-        self.search_in_so.setText(texts.search_in_so[lang])
+        self.coef.setTitle(texts.font_sz_menu[lang])
         self.exit.setText(texts.exit_presentation_btn[lang])
-        self.popup(event.globalPos())
+        super().__call__(event)
+
+    def coef_triggered(self, action: QAction) -> None:
+        font: QFont = self.lang_s.value('Font')
+        font.setPointSize(int(font.pointSize() * int(action.text()[:-1]) / 100))
+        self.p.setFont(font)
 
 
 class TreeViewMenu(QMenu):
@@ -298,23 +333,26 @@ class TreeViewMenu(QMenu):
         self.popup(event.globalPos())
 
     def new_file(self) -> None:
+        """Create a new file"""
         file: InputDialog = InputDialog(texts.new_btn[self.lang_s.value('Language')],
                                         texts.new_btn[self.lang_s.value('Language')], self)
         file.exec()
         if file.text_value():
             if file.text_value().endswith(('/', '\\')):
-                os.mkdir(self.c.model.filePath(self.c.tree.selectedIndexes()[0]) + '/' + file.text_value())
+                mkdir(self.c.model.filePath(self.c.tree.selectedIndexes()[0]) + '/' + file.text_value())
             else:
                 x: str = self.c.model.filePath(self.c.tree.selectedIndexes()[0]) + '/' + file.text_value()
                 open(x, 'w', encoding=self.lang_s.value('Encoding')).close()
                 self.c.add_tab(x)
 
     def copy_file(self) -> None:
+        """Copy file to clipboard (not working)"""
         n: str = self.c.model.filePath(self.c.tree.selectedIndexes()[0])
         if (isfile(n) or isdir(n)) and sys.platform == 'win32':
-            os.system(f'powershell -command "Set-Clipboard -Path "{n}""')
+            system(f'powershell -command "Set-Clipboard -Path "{n}""')
 
     def paste_file(self) -> None:
+        """Paste file from clipboard"""
         path: str = app.clipboard().mimeData().urls()[0].url().replace('file:///', '')
         new_path = self.c.model.filePath(self.c.tree.selectedIndexes()[0])
         if isdir(new_path):
@@ -324,13 +362,15 @@ class TreeViewMenu(QMenu):
                 shutil.copytree(path, new_path + '/' + path.rsplit('/', maxsplit=1)[-1])
 
     def delete_file(self) -> None:
+        """Delete file"""
         n: str = self.c.model.filePath(self.c.tree.selectedIndexes()[0])
         if isfile(n):
-            os.remove(n)
+            remove(n)
         elif isdir(n):
             shutil.rmtree(n)
 
     def rename_file(self) -> None:
+        """Rename file to new name"""
         file: InputDialog = InputDialog(texts.rename_btn[self.lang_s.value('Language')],
                                         texts.rename_btn[self.lang_s.value('Language')], self)
         path, name = self.c.model.filePath(self.c.tree.selectedIndexes()[0]).rsplit('/', maxsplit=1)
@@ -338,7 +378,7 @@ class TreeViewMenu(QMenu):
         file.exec()
         if file.text_value() != name:
             try:
-                os.rename(path + '/' + name, path + '/' + file.text_value())
+                rename(path + '/' + name, path + '/' + file.text_value())
             except Exception:
                 pass
 
@@ -397,28 +437,30 @@ class LineEditMenu(QMenu):
 
 
 class SystemMonitor(QDialog):
+    """Show CPU percent and memory usage"""
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.setWindowTitle('Vcode System monitor')
         self.setMinimumSize(300, 200)
-        self.lay = QVBoxLayout(self)
+        self.lay: QVBoxLayout = QVBoxLayout(self)
         self.setLayout(self.lay)
 
-        self.ide_process: psutil.Process = psutil.Process(os.getpid())
+        self.ide_process: psutil.Process = psutil.Process(getpid())
         self.list_processes: list[psutil.Process] = []
 
-        self.processor = QProgressBar(self)
+        self.processor: QProgressBar = QProgressBar(self)
         self.processor.setObjectName('monitor')
         self.processor.setFormat('CPU usage: %p%')
         self.lay.addWidget(self.processor)
 
-        self.ram = QProgressBar(self)
+        self.ram: QProgressBar = QProgressBar(self)
         self.ram.setObjectName('monitor')
         self.ram.setFormat('Memory usage: %p% - %v MB')
         self.ram.setMaximum(self.bytes_to_mb(psutil.virtual_memory().total))
         self.lay.addWidget(self.ram)
 
-        self.ide = QProgressBar(self)
+        self.ide: QProgressBar = QProgressBar(self)
         self.ide.setObjectName('monitor')
         self.ide.setFormat('Vcode memory usage: %p% - %v MB')
         self.ide.setMaximum(self.bytes_to_mb(psutil.virtual_memory().total))
@@ -432,20 +474,24 @@ class SystemMonitor(QDialog):
         self.timer.start()
 
     def monitor(self):
+        """Update values"""
         self.processor.setValue(int(psutil.cpu_percent()))
         self.ram.setValue(self.bytes_to_mb(psutil.virtual_memory().used))
         self.ide.setValue(self.bytes_to_mb(self.ide_process.memory_info().rss))
-        # print('Memory usage: {} MB'.format(self.bytes_to_mb(self.ide_process.memory_info().rss)))
 
     @staticmethod
     def bytes_to_mb(a: int | float) -> int:
+        """Convert bytes to megabytes"""
         return int(a / 1024 / 1024)
 
     def closeEvent(self, a0: QCloseEvent) -> None:
+        """Stop updating monitor"""
         self.timer.stop()
 
 
 class GitTab(QWidget):
+    """Tab with git repository"""
+
     def __init__(self, path: str, parent_exit_code_label: QLabel | None = None, parent=None):
         if not self.git_check():
             raise Exception('Git not installed')
@@ -488,6 +534,7 @@ class GitTab(QWidget):
         self.lay.addWidget(self.repo_list)
 
     def git_check(self):
+        """Check git installation"""
         try:
             subprocess.run('git -v')
             return True
@@ -543,21 +590,26 @@ class EditorTab(QPlainTextEdit):
         self.language: str = ''
 
     def set_highlighter(self, highlighter: Highlighter) -> None:
+        """Add highlighter to code"""
         self.highlighter: Highlighter = highlighter
         self.highlighter.setDocument(self.document())
 
     def save(self) -> None:
+        """Save text to file"""
         with open(self.file, 'w', encoding=self.pr_settings.value('Encoding')) as sf:
             sf.write(self.toPlainText())
         self.saved_text: str = self.toPlainText()
 
     def line_number_area_width(self) -> int:
+        """Return sizes of text area"""
         return max(45, 5 + self.fontMetrics().boundingRect('9').width() * (len(str(self.blockCount())) + 3))
 
     def update_line_number_area_width(self) -> None:
+        """Set sizes of text area"""
         self.setViewportMargins(self.line_number_area_width() + 7, 0, 0, 0)
 
     def update_line_number_area(self, rect: QRect, dy: int) -> None:
+        """Update sizes of text area"""
         if dy:
             self.line_num.scroll(0, dy)
         else:
@@ -566,11 +618,13 @@ class EditorTab(QPlainTextEdit):
             self.update_line_number_area_width()
 
     def resizeEvent(self, event: QResizeEvent) -> None:
+        """Resize event"""
         super().resizeEvent(event)
         cr: QRect = self.contentsRect()
         self.line_num.setGeometry(QRect(cr.left(), cr.top(), self.line_number_area_width(), cr.height()))
 
     def update_line_event(self, event: QPaintEvent) -> None:
+        """Update line number area"""
         painter: QPainter = QPainter(self.line_num)
         painter.setFont(self.font())
         block: QTextBlock = self.firstVisibleBlock()
@@ -588,6 +642,7 @@ class EditorTab(QPlainTextEdit):
             block_number += 1
 
     def highlight_current_line(self) -> None:
+        """Highlight selected line"""
         selections: list = []
         if not self.isReadOnly():
             selection: QTextEdit.ExtraSelection = QTextEdit.ExtraSelection()
@@ -600,6 +655,7 @@ class EditorTab(QPlainTextEdit):
         self.setExtraSelections(selections)
 
     def keyPressEvent(self, e: QKeyEvent) -> None:
+        """Reaction on key pressed"""
         txt_: str = self.toPlainText()
         cursor: QTextCursor = self.textCursor()
         tab_sz: int = self.pr_settings.value('Tab size')
@@ -747,6 +803,7 @@ class TabWidget(QTabWidget):
         self.currentChanged.connect(self.empty)
 
     def empty(self) -> None:
+        """Show button when tab list is empty"""
         if not self.count():
             self.empty_widget.setVisible(True)
         else:
@@ -876,7 +933,7 @@ class IdeWindow(QMainWindow):
         self.view_menu.addAction(self.monitor_btn)
 
         self.presentation_btn: QAction = QAction(self)
-        self.presentation_btn.setShortcut('Ctrl+F11')
+        self.presentation_btn.setShortcuts(['Ctrl+F11', 'F11'])
         self.presentation_btn.triggered.connect(self.presentation_mode)
         self.view_menu.addAction(self.presentation_btn)
 
@@ -941,7 +998,7 @@ class IdeWindow(QMainWindow):
 
         if not self.options.allKeys():
             self.options.setValue('Splitter', [225, 775])
-            self.options.setValue('Folder', expanduser('~'))
+            self.options.setValue('Folder', user)
             self.options.setValue('Geometry', 'Not init')
         self.splitter.setSizes(map(int, self.options.value('Splitter')))
 
@@ -978,6 +1035,7 @@ class IdeWindow(QMainWindow):
         self.check_updates()
 
     def show_ide(self) -> None:
+        """Show main ide window"""
         if self.options.value('Geometry') == 'Maximized':
             self.showMaximized()
         elif self.options.value('Geometry') == 'Not init':
@@ -988,6 +1046,7 @@ class IdeWindow(QMainWindow):
             self.show()
 
     def check_updates(self) -> None:
+        """Checking for updates"""
         def check():
             try:
                 if VERSION not in get('https://github.com/VVV33301/Vcode/releases/latest').text.split('title>')[1]:
@@ -998,9 +1057,11 @@ class IdeWindow(QMainWindow):
         threading.Thread(target=check).start()
 
     def show_monitor(self) -> None:
+        """Run system monitor"""
         SystemMonitor(self).show()
 
     def sel_tab(self) -> None:
+        """Change current tab"""
         if self.editor_tabs.count():
             self.setWindowTitle(self.editor_tabs.tabText(self.editor_tabs.currentIndex()) + ' - Vcode')
             if type(self.editor_tabs.currentWidget()) == EditorTab:
@@ -1017,6 +1078,7 @@ class IdeWindow(QMainWindow):
             self.setWindowTitle('Vcode')
 
     def add_tab(self, filename: str, row: int | None = None) -> None:
+        """Add new text tab"""
         if not isfile(filename):
             return
         for tab in self.editor_tabs.findChildren(EditorTab):
@@ -1053,6 +1115,7 @@ class IdeWindow(QMainWindow):
         self.editor_tabs.setTabToolTip(self.editor_tabs.currentIndex(), editor.file)
 
     def add_git_tab(self, path: str, row: int | None = None) -> None:
+        """Add new git repository tab"""
         if not isdir(path):
             return
         editor: GitTab = GitTab(path, self.exit_code, self)
@@ -1063,30 +1126,25 @@ class IdeWindow(QMainWindow):
         self.editor_tabs.setTabToolTip(self.editor_tabs.currentIndex(), path)
 
     def close_tab(self, tab: int) -> None:
+        """Close tab"""
         widget: EditorTab | GitTab = self.editor_tabs.widget(tab)
         if type(widget) is EditorTab:
             if widget.saved_text != widget.toPlainText():
-                button: QMessageBox.StandardButton = QMessageBox.warning(
-                    self, 'Warning', texts.save_warning[self.settings.value('Language')],
-                    buttons=QMessageBox.StandardButton.Save | QMessageBox.StandardButton.Discard |
-                            QMessageBox.StandardButton.Cancel,
-                    defaultButton=QMessageBox.StandardButton.Save)
-                if button == QMessageBox.StandardButton.Cancel:
+                button_text: str = WarningMessageBox(self, 'Warning', texts.save_warning).wait()
+                if button_text in texts.cancel_btn.values():
                     return
-                elif button == QMessageBox.StandardButton.Save:
+                elif button_text in texts.save_btn.values():
                     widget.save()
         self.editor_tabs.removeTab(tab)
         widget.deleteLater()
 
     def presentation_mode(self) -> None:
+        """Show current tab fullscreen"""
         tab: EditorTab | GitTab | None = self.editor_tabs.currentWidget()
         if type(tab) is EditorTab:
             editor: EditorTab = EditorTab(tab.file, self)
             editor.setWindowFlag(Qt.WindowType.Window)
             editor.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
-            font: QFont = self.settings.value('Font')
-            font.setPointSize(font.pointSize() * 2)
-            editor.setFont(font)
             editor.contextMenuEvent = TextEditFullscreenMenu(editor)
             c: QTextCursor = editor.textCursor()
             c.movePosition(QTextCursor.MoveOperation.End)
@@ -1102,6 +1160,7 @@ class IdeWindow(QMainWindow):
             editor.closeEvent = lambda e: self.show_ide()
 
     def select_language(self, language: str) -> None:
+        """Translate program labels"""
         self.settings.setValue('Language', language)
 
         self.settings_window.setWindowTitle(texts.settings_btn[language])
@@ -1131,50 +1190,53 @@ class IdeWindow(QMainWindow):
         self.settings_window.font_select_group.setTitle(texts.font_select_group[language])
 
     def select_style(self, style_name: str) -> None:
+        """Set style to windows"""
         if style_name in STYLE.keys():
             self.settings.setValue('Style', style_name)
             self.setStyleSheet(STYLE[style_name])
 
     def select_font(self) -> None:
+        """Change font for text edit area"""
         font: QFont = QFont(self.settings_window.fonts.currentText(), self.settings_window.font_size.value())
         self.settings.setValue('Font', font)
         for tab in self.editor_tabs.findChildren(EditorTab):
             tab.setFont(font)
 
     def autorun_check(self) -> None:
+        """Set autorun settings"""
         self.settings.setValue('Autorun', int(self.settings_window.autorun.isChecked()))
         set_autorun(self.settings_window.autorun.isChecked())
 
     def start_terminal(self) -> None:
+        """Open terminal window"""
         if sys.platform == 'win32':
-            os.system('start "Vcode terminal" powershell')
+            system('start "Vcode terminal" powershell')
         elif sys.platform.startswith('linux'):
-            os.system('gnome-terminal')
+            system('gnome-terminal')
         else:
             self.exit_code.setText('Can`t start terminal in this operating system')
 
     def start_program(self) -> None:
+        """Run code from current tab"""
         if self.editor_tabs.count():
             if not self.settings.value('Autosave') and \
                     self.editor_tabs.currentWidget().saved_text != self.editor_tabs.currentWidget().toPlainText():
-                button: QMessageBox.StandardButton = QMessageBox.warning(
-                    self, 'Warning', texts.save_warning[self.settings.value('Language')],
-                    buttons=QMessageBox.StandardButton.Save | QMessageBox.StandardButton.Cancel,
-                    defaultButton=QMessageBox.StandardButton.Save)
-                if button == QMessageBox.StandardButton.Cancel:
+                button_text: str = WarningMessageBox(self, 'Warning', texts.save_warning).wait()
+                if button_text in texts.cancel_btn.values():
                     return
-                else:
+                elif button_text in texts.save_btn.values():
                     self.editor_tabs.currentWidget().save()
             threading.Thread(target=self.program).start()
 
     def program(self) -> None:
+        """Code working process"""
         code: EditorTab = self.editor_tabs.currentWidget()
         pth: str = code.path
         fnm: str = code.filename
         if code.language in language_list.keys():
             tid: str = str(threading.current_thread().native_id)
             if sys.platform == 'win32':
-                with open(f'process_{tid}.bat', 'w', encoding='utf-8') as bat_win32:
+                with open(f'{user}/.Vcode/process_{tid}.bat', 'w', encoding='utf-8') as bat_win32:
                     bat_win32.write(f'''
                               @echo off
                               chcp 65001>nul
@@ -1185,13 +1247,13 @@ class IdeWindow(QMainWindow):
                               echo %errorlevel% > {fnm}.output
                               pause
                               ''')
-                process: subprocess.Popen = subprocess.Popen(f'process_{tid}.bat',
+                process: subprocess.Popen = subprocess.Popen(f'{user}/.Vcode/process_{tid}.bat',
                                                              creationflags=subprocess.CREATE_NEW_CONSOLE,
                                                              process_group=subprocess.CREATE_NEW_PROCESS_GROUP)
                 process.wait()
-                os.remove(f'process_{tid}.bat')
+                remove(f'{user}/.Vcode/process_{tid}.bat')
             elif sys.platform.startswith('linux'):
-                with open(f'process_{tid}.sh', 'w', encoding='utf-8') as bat_linux:
+                with open(f'{user}/.Vcode/process_{tid}.sh', 'w', encoding='utf-8') as bat_linux:
                     bat_linux.write(f'''
                               #!/bin/bash
                               cd {pth}
@@ -1202,10 +1264,11 @@ class IdeWindow(QMainWindow):
                               echo $ec > {fnm}.output
                               read -r -p "Press enter to continue..." key
                               ''')
-                os.system(f'chmod +x {resource_path(f"process_{tid}.sh")}')
-                process: subprocess.Popen = subprocess.Popen(resource_path(f"process_{tid}.sh"), shell=True)
+                system(f'chmod +x {resource_path(f"{user}/.Vcode/process_{tid}.sh")}')
+                process: subprocess.Popen = subprocess.Popen(resource_path(f"{user}/.Vcode/process_{tid}.sh"),
+                                                             shell=True)
                 process.wait()
-                os.remove(f'process_{tid}.sh')
+                remove(f'{user}/.Vcode/process_{tid}.sh')
             else:
                 with open(f'{pth}/{fnm}.output', 'w') as bat_w:
                     bat_w.write('Can`t start terminal in this operating system')
@@ -1214,15 +1277,17 @@ class IdeWindow(QMainWindow):
                     self.exit_code.setText(f'Exit code: {x[0].rstrip()}')
                 else:
                     self.exit_code.setText('Interrupted')
-            os.remove(f'{pth}/{fnm}.output')
+            remove(f'{pth}/{fnm}.output')
         else:
             self.exit_code.setText(f'Can`t start "{fnm}"')
 
     def save_file(self) -> None:
+        """Save text to file"""
         if self.editor_tabs.count():
             self.editor_tabs.currentWidget().save()
 
     def new_file(self) -> None:
+        """Create new file"""
         file, _ = QFileDialog.getSaveFileName(directory=self.options.value('Folder') + '/untitled',
                                               filter=';;'.join(update_filters()))
         if file:
@@ -1231,6 +1296,7 @@ class IdeWindow(QMainWindow):
             self.add_tab(file)
 
     def open_file(self) -> None:
+        """Open file"""
         file, _ = QFileDialog.getOpenFileName(directory=self.options.value('Folder'),
                                               filter=';;'.join(update_filters()))
         if file:
@@ -1238,6 +1304,7 @@ class IdeWindow(QMainWindow):
             self.add_tab(file)
 
     def save_as(self) -> None:
+        """Save file as new file"""
         if self.editor_tabs.count():
             path, _ = QFileDialog.getSaveFileName(
                 directory=self.options.value('Folder') + '/' + self.editor_tabs.currentWidget().filename,
@@ -1249,11 +1316,13 @@ class IdeWindow(QMainWindow):
                 self.add_tab(path)
 
     def auto_save(self) -> None:
+        """Save file when text changes"""
         if self.settings.value('Autosave'):
             self.editor_tabs.currentWidget().saved_text = self.editor_tabs.currentWidget().toPlainText()
             self.editor_tabs.currentWidget().save()
 
     def git_check(self) -> bool:
+        """Check git installation"""
         try:
             subprocess.run('git -v')
             return True
@@ -1262,8 +1331,9 @@ class IdeWindow(QMainWindow):
             return False
 
     def git_open(self) -> None:
+        """Open git repository on computer"""
         if self.git_check():
-            path: str = QFileDialog.getExistingDirectory(directory=os.path.expanduser('~'))
+            path: str = QFileDialog.getExistingDirectory(directory=user)
             if path:
                 try:
                     if git.Repo(path).git_dir:
@@ -1272,19 +1342,21 @@ class IdeWindow(QMainWindow):
                     self.exit_code.setText(f'Not git repo {path}')
 
     def git_init(self) -> None:
+        """Initialize new git repository"""
         if self.git_check():
-            path: str = QFileDialog.getExistingDirectory(directory=os.path.expanduser('~'))
+            path: str = QFileDialog.getExistingDirectory(directory=user)
             if path:
                 git.Repo.init(path)
                 self.add_git_tab(path)
                 self.exit_code.setText(f'Initialize repository {path}')
 
     def git_clone(self) -> None:
+        """Clone git repository from url"""
         if self.git_check():
             git_file: InputDialog = InputDialog('File', 'File', self)
             git_file.exec()
             if git_file.text_value():
-                path: str = QFileDialog.getExistingDirectory(directory=os.path.expanduser('~'))
+                path: str = QFileDialog.getExistingDirectory(directory=user)
                 if path:
                     git.Repo.clone_from(git_file.text_value(), path)
 
@@ -1296,21 +1368,19 @@ class IdeWindow(QMainWindow):
             event.ignore()
 
     def dropEvent(self, event: QDropEvent) -> None:
+        """Open files from drop event"""
         for url in event.mimeData().urls():
             self.add_tab(url.toString().replace('file:///', ''))
         return super().dropEvent(event)
 
     def closeEvent(self, a0: QCloseEvent) -> None:
+        """Save all settings when close"""
         for tab in self.editor_tabs.findChildren(EditorTab):
             if tab.saved_text != tab.toPlainText():
-                button: QMessageBox.StandardButton = QMessageBox.warning(
-                    self, 'Warning', texts.save_warning[self.settings.value('Language')],
-                    buttons=QMessageBox.StandardButton.Save | QMessageBox.StandardButton.Discard |
-                            QMessageBox.StandardButton.Cancel,
-                    defaultButton=QMessageBox.StandardButton.Save)
-                if button == QMessageBox.StandardButton.Cancel:
+                button_text: str = WarningMessageBox(self, 'Warning', texts.save_warning).wait()
+                if button_text in texts.cancel_btn.values():
                     a0.ignore()
-                elif button == QMessageBox.StandardButton.Save:
+                elif button_text in texts.save_btn.values():
                     for stab in self.editor_tabs.findChildren(EditorTab):
                         stab.save()
                     a0.accept()
@@ -1400,11 +1470,13 @@ class SettingsDialog(QDialog):
         self.add_btn.triggered.connect(self.add_language)
 
     def language_settings(self) -> None:
+        """Open settings of language"""
         lsd: LanguageSettingsDialog = LanguageSettingsDialog(self.languages_list.currentItem().text(), self)
         lsd.setWindowTitle(f'{self.languages_list.currentItem().text()} - Vcode languages')
         lsd.exec()
 
     def languages_context_menu(self, event: QContextMenuEvent) -> None:
+        """Custom context menu for language list"""
         menu: QMenu = QMenu(self)
         item: QListWidgetItem = self.languages_list.itemAt(event.pos())
         if item:
@@ -1418,6 +1490,7 @@ class SettingsDialog(QDialog):
         menu.popup(event.globalPos())
 
     def remove_language(self) -> None:
+        """Remove a language"""
         name: QListWidgetItem = self.languages_list.selectedItems()[0]
         del language_list[name.text()]
         with open(resource_path('languages.json'), 'w') as llfw:
@@ -1425,6 +1498,7 @@ class SettingsDialog(QDialog):
         self.languages_list.takeItem(self.languages_list.row(name))
 
     def add_language(self) -> None:
+        """Add new language"""
         name: InputDialog = InputDialog('Name', 'Enter name:', self)
         name.exec()
         if name.text_value():
@@ -1453,7 +1527,7 @@ class AboutDialog(QDialog):
         self.name.setFont(QFont('Arial', 18))
         self.lay.addWidget(self.name, alignment=Qt.AlignmentFlag.AlignHCenter)
 
-        self.text: QLabel = QLabel(f'Version: {VERSION}\n\nVladimir Varenik\nAll rights reserved', self)
+        self.text: QLabel = QLabel(f'Version: {VERSION}\n\nVladimir Varenik\nCopyright. All rights reserved', self)
         self.lay.addWidget(self.text)
 
         self.setLayout(self.lay)
@@ -1495,11 +1569,13 @@ class LanguageSettingsDialog(QDialog):
         layout.addWidget(self.save_btn, 3, 1, 1, 1)
 
     def highlight_maker_call(self) -> None:
+        """Start highlight maker"""
         hlm: HighlightMaker = HighlightMaker(language_list[self.language]['highlight'], self)
         hlm.setWindowTitle(f'{language_list[self.language]["highlight"].split("/")[-1]} - Vcode highlight maker')
         hlm.exec()
 
     def save_language(self) -> None:
+        """Save a language"""
         language_list[self.language]: dict[str, str] = {'highlight': self.highlight.text(),
                                                         'file_formats': [f for f in self.file_formats.text().split()],
                                                         'start_command': self.start_command.text()}
@@ -1532,9 +1608,11 @@ class HighlightMaker(QDialog):
         layout.addWidget(self.save_btn, 1, 1, 1, 1)
 
     def add_string(self) -> None:
+        """Add new string"""
         self.layout_hl.addWidget(HighlightMakerString('', '{}'))
 
     def save_highlighter(self) -> None:
+        """Save highlighter to .hl file"""
         with open(self.highlighter, 'w') as hlf:
             for hms in self.findChildren(HighlightMakerString):
                 hlf.write(hms.rstring.text() + ' = {' + hms.json_params.text() + '};\n')

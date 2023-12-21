@@ -21,6 +21,9 @@ monitor_btn = {'en': 'System monitor', 'ru': 'Системный монитор'
 presentation_btn = {'en': 'Presentation mode', 'ru': 'Режим презентации', 'de': 'Präsentationsmodus', 'ch': '演示模式'}
 exit_presentation_btn = {'en': 'Exit presentation', 'ru': 'Выйти из презентации', 'de': 'Präsentation beenden',
                          'ch': '退出演示'}
+discard_btn = {'en': 'Not save', 'ru': 'Не сохранять', 'de': 'Speichern nicht', 'ch': '不保存'}
+cancel_btn = {'en': 'Cancel', 'ru': 'Отмена', 'de': 'Stornieren', 'ch': '取消'}
+font_sz_menu = {'en': 'Font scale', 'ru': 'Масштаб шрифта', 'de': 'Schriftskala', 'ch': '字体比例'}
 
 autorun = {'en': 'Autorun', 'ru': 'Автозагрузка', 'de': 'Automatisch laden', 'ch': '自动加载'}
 autosave = {'en': 'Autosave', 'ru': 'Автосохранение', 'de': 'Automatisches Speichern', 'ch': '自动保存'}
