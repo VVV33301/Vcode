@@ -1,3 +1,20 @@
+# Vcode
+# Copyright (C) 2023-2024  Vladimir Varenik  <feedback.vcode@gmail.com>
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see https://www.gnu.org/licenses/.
+
+
 import sys
 import subprocess
 import threading
@@ -66,16 +83,19 @@ if exists(user + '/.Vcode/'):
         language_list: dict[str, dict[str, str]] = json.load(llf)
     if 'Python' not in language_list.keys():
         from default import python_ll
+
         language_list["Python"] = python_ll
         with open(user + '/.Vcode/languages.json', 'w') as llf:
             json.dump(language_list, llf)
     if 'Html' not in language_list.keys():
         from default import html_ll
+
         language_list["Html"] = html_ll
         with open(user + '/.Vcode/languages.json', 'w') as llf:
             json.dump(language_list, llf)
 else:
     from default import *
+
     language_list: dict[str, dict[str, str]] = {"Python": python_ll, "Html": html_ll}
     mkdir(user + '/.Vcode/')
     with open(user + '/.Vcode/languages.json', 'w') as llf:
@@ -123,6 +143,7 @@ class Highlighter(QSyntaxHighlighter):
                 self.mapping[rf'{expression}']: QTextCharFormat = text_char
 
     def highlightBlock(self, text: str) -> None:
+        """Highlight the block of text"""
         for pattern, char in self.mapping.items():
             for match in re.finditer(pattern, text, re.MULTILINE):
                 s, e = match.span()
@@ -213,6 +234,13 @@ class TextEditMenu(QMenu):
 
         self.addSeparator()
 
+        self.find: QAction = QAction(self)
+        self.find.triggered.connect(lambda: FindWindow(self.p).exec())
+        self.find.setShortcut(QKeySequence.StandardKey.Find)
+        self.addAction(self.find)
+
+        self.addSeparator()
+
         self.start: QAction = QAction(self)
         self.start.triggered.connect(ide.start_program)
         self.start.setShortcut(QKeySequence.StandardKey.Refresh)
@@ -243,6 +271,7 @@ class TextEditMenu(QMenu):
         self.copy.setText(texts.copy[lang])
         self.paste.setText(texts.paste[lang])
         self.select_all.setText(texts.select_all[lang])
+        self.find.setText(texts.find_btn[lang])
         self.start.setText(texts.start_btn[lang])
         self.search.setTitle(texts.search[lang])
         self.search_in_g.setText(texts.search_in_g[lang])
@@ -284,6 +313,7 @@ class TextEditFullscreenMenu(TextEditMenu):
         super().__call__(event)
 
     def coef_triggered(self, action: QAction) -> None:
+        """Reset font size"""
         font: QFont = self.lang_s.value('Font')
         font.setPointSize(int(font.pointSize() * int(action.text()[:-1]) / 100))
         self.p.setFont(font)
@@ -580,7 +610,10 @@ class EditorTab(QPlainTextEdit):
             with open(file, encoding=self.pr_settings.value('Encoding')) as cf:
                 self.setPlainText(cf.read())
         except UnicodeDecodeError:
-            self.setPlainText('Unsupported encoding')
+            self.setPlainText(texts.unsupported_encoding[self.pr_settings.value('Language')])
+            self.te: QPushButton = QPushButton(texts.open_uns_btn[self.pr_settings.value('Language')], self)
+            self.te.setGeometry(50, self.font().pointSize() + 20, 200, 30)
+            self.te.clicked.connect(self.open_file)
             self.setReadOnly(True)
             self.save = lambda: None
             self.line_num.setVisible(False)
@@ -599,6 +632,14 @@ class EditorTab(QPlainTextEdit):
         with open(self.file, 'w', encoding=self.pr_settings.value('Encoding')) as sf:
             sf.write(self.toPlainText())
         self.saved_text: str = self.toPlainText()
+
+    def open_file(self):
+        if sys.platform == 'win32':
+            system(f'start "" "{self.file}"')
+        elif sys.platform.startswith('linux'):
+            system(f'xdg-open "{self.file}"')
+        else:
+            self.setPlainText('Can`t open tis file in this operating system')
 
     def line_number_area_width(self) -> int:
         """Return sizes of text area"""
@@ -810,6 +851,47 @@ class TabWidget(QTabWidget):
             self.empty_widget.setVisible(False)
 
 
+class FindWindow(QDialog):
+    """Find all text usages of string"""
+
+    def __init__(self, parent: EditorTab = None) -> None:
+        super().__init__(parent)
+        self.parent: EditorTab = parent
+        self.setModal(True)
+        self.setMinimumSize(400, 150)
+        layout: QVBoxLayout = QVBoxLayout(self)
+        self.setLayout(layout)
+        self.setWindowTitle(texts.find_btn[self.parent.pr_settings.value('Language')])
+
+        self.find_line: QLineEdit = QLineEdit(self)
+        self.find_line.textChanged.connect(self.search)
+        self.find_line.contextMenuEvent = LineEditMenu(self.find_line)
+        layout.addWidget(self.find_line)
+
+        self.list: QListWidget = QListWidget(self)
+        self.list.itemClicked.connect(self.go_to_line)
+        layout.addWidget(self.list)
+
+        self.counter: QLabel = QLabel('Total results: 0', self)
+        layout.addWidget(self.counter)
+
+    def search(self) -> None:
+        """Scat text for search usages"""
+        self.list.clear()
+        find: str = self.find_line.text()
+        if find:
+            text: list[str] = self.parent.toPlainText().split('\n')
+            for i in range(self.parent.blockCount()):
+                if find in text[i].lower():
+                    self.list.addItem(f'Line {i}: "{text[i]}"')
+        self.counter.setText(f'Total results: {self.list.count()}')
+
+    def go_to_line(self, key: QListWidgetItem) -> None:
+        """Open selected line in text"""
+        self.parent.setTextCursor(
+            QTextCursor(self.parent.document().findBlockByLineNumber(int(key.text()[5:].split(':')[0]))))
+
+
 class HighlightMakerString(QWidget):
     """Editor string for highlight maker"""
 
@@ -897,6 +979,10 @@ class IdeWindow(QMainWindow):
         self.position_code.setObjectName('exit_code')
         self.tool_bar.addWidget(self.position_code)
 
+        self.selection_code: QLabel = QLabel('()')
+        self.selection_code.setObjectName('exit_code')
+        self.tool_bar.addWidget(self.selection_code)
+
         self.file_menu: QMenu = QMenu(self)
         self.menuBar().addMenu(self.file_menu)
 
@@ -919,6 +1005,49 @@ class IdeWindow(QMainWindow):
         self.save_as_btn.setShortcut(QKeySequence.StandardKey.SaveAs)
         self.save_as_btn.triggered.connect(self.save_as)
         self.file_menu.addAction(self.save_as_btn)
+
+        self.edit_menu: QMenu = QMenu(self)
+        self.edit_menu.setEnabled(False)
+        self.menuBar().addMenu(self.edit_menu)
+
+        self.undo: QAction = QAction(self)
+        self.undo.triggered.connect(lambda: self.editor_tabs.currentWidget().undo())
+        self.undo.setShortcut(QKeySequence.StandardKey.Undo)
+        self.edit_menu.addAction(self.undo)
+
+        self.redo: QAction = QAction(self)
+        self.redo.triggered.connect(lambda: self.editor_tabs.currentWidget().redo())
+        self.redo.setShortcut(QKeySequence.StandardKey.Redo)
+        self.edit_menu.addAction(self.redo)
+
+        self.edit_menu.addSeparator()
+
+        self.cut: QAction = QAction(self)
+        self.cut.triggered.connect(lambda: self.editor_tabs.currentWidget().cut())
+        self.cut.setShortcut(QKeySequence.StandardKey.Cut)
+        self.edit_menu.addAction(self.cut)
+
+        self.copy: QAction = QAction(self)
+        self.copy.triggered.connect(lambda: self.editor_tabs.currentWidget().copy())
+        self.copy.setShortcut(QKeySequence.StandardKey.Copy)
+        self.edit_menu.addAction(self.copy)
+
+        self.paste: QAction = QAction(self)
+        self.paste.triggered.connect(lambda: self.editor_tabs.currentWidget().paste())
+        self.paste.setShortcut(QKeySequence.StandardKey.Paste)
+        self.edit_menu.addAction(self.paste)
+
+        self.select_all: QAction = QAction(self)
+        self.select_all.triggered.connect(lambda: self.editor_tabs.currentWidget().selectAll())
+        self.select_all.setShortcut(QKeySequence.StandardKey.SelectAll)
+        self.edit_menu.addAction(self.select_all)
+
+        self.edit_menu.addSeparator()
+
+        self.find_btn: QAction = QAction(self)
+        self.find_btn.triggered.connect(lambda: FindWindow(self.editor_tabs.currentWidget()).exec())
+        self.find_btn.setShortcut(QKeySequence.StandardKey.Find)
+        self.edit_menu.addAction(self.find_btn)
 
         self.view_menu: QMenu = QMenu(self)
         self.menuBar().addMenu(self.view_menu)
@@ -1074,8 +1203,14 @@ class IdeWindow(QMainWindow):
             else:
                 self.tree.selectionModel().select(self.model.index(self.editor_tabs.currentWidget().path),
                                                   QItemSelectionModel.SelectionFlag.Select)
+            self.position_code.setText('0:0')
+            self.selection_code.setText('')
+            self.edit_menu.setEnabled(True)
         else:
             self.setWindowTitle('Vcode')
+            self.position_code.setText('')
+            self.selection_code.setText('')
+            self.edit_menu.setEnabled(False)
 
     def add_tab(self, filename: str, row: int | None = None) -> None:
         """Add new text tab"""
@@ -1098,6 +1233,9 @@ class IdeWindow(QMainWindow):
         editor.contextMenuEvent = TextEditMenu(editor)
         editor.cursorPositionChanged.connect(lambda: self.position_code.setText('{}:{}'.format(
             editor.textCursor().blockNumber() + 1, editor.textCursor().positionInBlock() + 1)))
+        editor.selectionChanged.connect(lambda: self.selection_code.setText(
+            f' ({se} chars)' if (se := editor.textCursor().selectionEnd() - editor.textCursor().selectionStart()) > 1
+            else ''))
         c: QTextCursor = editor.textCursor()
         c.movePosition(QTextCursor.MoveOperation.End)
         editor.setTextCursor(c)
@@ -1181,6 +1319,14 @@ class IdeWindow(QMainWindow):
         self.view_menu.setTitle(texts.view_btn[language])
         self.monitor_btn.setText(texts.monitor_btn[language])
         self.presentation_btn.setText(texts.presentation_btn[language])
+        self.edit_menu.setTitle(texts.edit_btn[language])
+        self.undo.setText(texts.undo[language])
+        self.redo.setText(texts.redo[language])
+        self.cut.setText(texts.cut[language])
+        self.copy.setText(texts.copy[language])
+        self.paste.setText(texts.paste[language])
+        self.select_all.setText(texts.select_all[language])
+        self.find_btn.setText(texts.find_btn[language])
 
         self.settings_window.autorun.setText(texts.autorun[language])
         self.settings_window.autosave.setText(texts.autosave[language])
@@ -1493,7 +1639,7 @@ class SettingsDialog(QDialog):
         """Remove a language"""
         name: QListWidgetItem = self.languages_list.selectedItems()[0]
         del language_list[name.text()]
-        with open(resource_path('languages.json'), 'w') as llfw:
+        with open(resource_path('files/languages.json'), 'w') as llfw:
             json.dump(language_list, llfw)
         self.languages_list.takeItem(self.languages_list.row(name))
 
@@ -1503,7 +1649,7 @@ class SettingsDialog(QDialog):
         name.exec()
         if name.text_value():
             language_list[name.text_value()] = {"highlight": "", "file_formats": [], "start_command": ""}
-            with open(resource_path('languages.json'), 'w') as llfw:
+            with open(resource_path('files/languages.json'), 'w') as llfw:
                 json.dump(language_list, llfw)
         self.languages_list.addItem(QListWidgetItem(name.text_value(), self.languages_list))
 
@@ -1516,21 +1662,24 @@ class AboutDialog(QDialog):
         self.setModal(True)
         self.setWindowTitle(f'Vcode v{VERSION}')
         self.setMinimumSize(250, 200)
-        self.lay: QVBoxLayout = QVBoxLayout()
+        layout: QVBoxLayout = QVBoxLayout()
+        self.setLayout(layout)
 
         self.icon: QLabel = QLabel(self)
         self.icon.setPixmap(QPixmap(resource_path('Vcode.ico')).scaled(128, 128))
         self.icon.resize(128, 128)
-        self.lay.addWidget(self.icon, alignment=Qt.AlignmentFlag.AlignHCenter)
+        layout.addWidget(self.icon, alignment=Qt.AlignmentFlag.AlignHCenter)
 
         self.name: QLabel = QLabel('Vcode', self)
         self.name.setFont(QFont('Arial', 18))
-        self.lay.addWidget(self.name, alignment=Qt.AlignmentFlag.AlignHCenter)
+        layout.addWidget(self.name, alignment=Qt.AlignmentFlag.AlignHCenter)
 
         self.text: QLabel = QLabel(f'Version: {VERSION}\n\nVladimir Varenik\nCopyright. All rights reserved', self)
-        self.lay.addWidget(self.text)
+        layout.addWidget(self.text)
 
-        self.setLayout(self.lay)
+        self.license: QLabel = QLabel('<a href="https://github.com/VVV33301/Vcode/blob/master/LICENSE.md">License</a>')
+        self.license.setOpenExternalLinks(True)
+        layout.addWidget(self.license)
 
 
 class LanguageSettingsDialog(QDialog):
@@ -1579,7 +1728,7 @@ class LanguageSettingsDialog(QDialog):
         language_list[self.language]: dict[str, str] = {'highlight': self.highlight.text(),
                                                         'file_formats': [f for f in self.file_formats.text().split()],
                                                         'start_command': self.start_command.text()}
-        with open(resource_path('languages.json'), 'w') as llfw:
+        with open(resource_path('files/languages.json'), 'w') as llfw:
             json.dump(language_list, llfw)
 
 

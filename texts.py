@@ -16,7 +16,8 @@ edit_highlight_btn = {'en': 'Edit highlight', 'ru': 'Редактировать 
                       'ch': '编辑突出显示'}
 remove_btn = {'en': 'Remove', 'ru': 'Удалить', 'de': 'Löschen', 'ch': '删除'}
 download_btn = {'en': 'Update Vcode', 'ru': 'Обновить Vcode', 'de': 'Vcode aktualisieren', 'ch': '更新Vcode'}
-view_btn = {'en': 'View', 'ru': 'Окна', 'de': 'Sicht', 'ch': '看法'}
+edit_btn = {'en': 'Edit', 'ru': 'Правка', 'de': 'Bearbeiten', 'ch': '编辑'}
+view_btn = {'en': 'View', 'ru': 'Вид', 'de': 'Sicht', 'ch': '看法'}
 monitor_btn = {'en': 'System monitor', 'ru': 'Системный монитор', 'de': 'Systemmonitor', 'ch': '系统监控'}
 presentation_btn = {'en': 'Presentation mode', 'ru': 'Режим презентации', 'de': 'Präsentationsmodus', 'ch': '演示模式'}
 exit_presentation_btn = {'en': 'Exit presentation', 'ru': 'Выйти из презентации', 'de': 'Präsentation beenden',
@@ -24,6 +25,9 @@ exit_presentation_btn = {'en': 'Exit presentation', 'ru': 'Выйти из пр�
 discard_btn = {'en': 'Not save', 'ru': 'Не сохранять', 'de': 'Speichern nicht', 'ch': '不保存'}
 cancel_btn = {'en': 'Cancel', 'ru': 'Отмена', 'de': 'Stornieren', 'ch': '取消'}
 font_sz_menu = {'en': 'Font scale', 'ru': 'Масштаб шрифта', 'de': 'Schriftskala', 'ch': '字体比例'}
+open_uns_btn = {'en': 'Open in other program', 'ru': 'Открыть в другой программе',
+                'de': 'In einem anderen Programm öffnen', 'ch': '在其他程序中打开'}
+find_btn = {'en': 'Find', 'ru': 'Поиск', 'de': 'Finden', 'ch': '寻找'}
 
 autorun = {'en': 'Autorun', 'ru': 'Автозагрузка', 'de': 'Automatisch laden', 'ch': '自动加载'}
 autosave = {'en': 'Autosave', 'ru': 'Автосохранение', 'de': 'Automatisches Speichern', 'ch': '自动保存'}
@@ -43,5 +47,11 @@ search_in_g = {'en': 'Search in Google', 'ru': 'Искать в Google', 'de': '
 search_in_so = {'en': 'Search in Stack Overflow', 'ru': 'Искать на Stack Overflow', 'de': 'Suchen in Stack Overflow',
                 'ch': '在 Stack Overflow 中搜索'}
 
+unsupported_encoding = {'en': 'Unsupported encoding', 'ru': 'Неподдерживаемая кодировка',
+                        'de': 'Nicht unterstützte Kodierung', 'ch': '不支持的编码'}
 save_warning = {'en': 'Do you want to save changes?', 'ru': 'Вы хотите сохранить изменения?',
                 'de': 'Möchten Sie Änderungen speichern?', 'ch': '您想保存更改吗?'}
+update_warning = {'en': 'New version of Vcode is available. Do you want to update?',
+                  'ru': 'Доступна новая версия Vcode. Вы хотите обновить?',
+                  'de': 'Neue Version von Vcode ist verfügbar. Möchten Sie aktualisieren?',
+                  'ch': '新版本的 Vcode 已可用. 你想更新吗?'}
