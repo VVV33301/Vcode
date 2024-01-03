@@ -26,7 +26,6 @@ from os import mkdir, system, remove, getpid, rename
 from os.path import isfile, isdir, dirname, abspath, join, exists, expanduser
 from requests import get
 import psutil
-import git
 
 from PyQt6.QtWidgets import *
 from PyQt6.QtCore import *
@@ -34,6 +33,13 @@ from PyQt6.QtGui import *
 
 import texts
 from style import STYLE
+
+try:
+    import git
+    GIT_INSTALLED: bool = True
+except ImportError:
+    git = None
+    GIT_INSTALLED: bool = False
 
 VERSION: str = '0.6.0'
 
@@ -523,19 +529,21 @@ class GitTab(QWidget):
     """Tab with git repository"""
 
     def __init__(self, path: str, parent_exit_code_label: QLabel | None = None, parent=None):
-        if not self.git_check():
-            raise Exception('Git not installed')
-        super().__init__(parent=parent)
-        self.p: IdeWindow = parent
-        self.path: str = path
-        self.l_s: QSettings = QSettings('Vcode', 'Settings')
         if parent_exit_code_label is not None:
             self.exit_code: QLabel = parent_exit_code_label
         else:
             self.exit_code: QLabel = QLabel()
+        if not GIT_INSTALLED:
+            self.exit_code.setText('Git not installed')
+            return
+        super().__init__(parent=parent)
+        self.p: IdeWindow = parent
+        self.path: str = path
+        self.l_s: QSettings = QSettings('Vcode', 'Settings')
 
         self.git_repo: git.Repo = git.Repo(path)
 
+        self.lay: QGridLayout = QGridLayout(self)
         self.lay: QGridLayout = QGridLayout(self)
         self.bar: QToolBar = QToolBar(self)
         self.lay.addWidget(self.bar)
@@ -562,15 +570,6 @@ class GitTab(QWidget):
         self.repo_list.setRootIndex(self.repo_list_model.index(path))
         self.repo_list.doubleClicked.connect(lambda x: self.p.add_tab(self.repo_list_model.filePath(x)))
         self.lay.addWidget(self.repo_list)
-
-    def git_check(self):
-        """Check git installation"""
-        try:
-            subprocess.run('git -v')
-            return True
-        except FileNotFoundError:
-            self.exit_code.setText('Git not installed')
-            return False
 
     def change_branch(self, branch: str):
         self.git_repo.head.reference = branch
@@ -1467,18 +1466,9 @@ class IdeWindow(QMainWindow):
             self.editor_tabs.currentWidget().saved_text = self.editor_tabs.currentWidget().toPlainText()
             self.editor_tabs.currentWidget().save()
 
-    def git_check(self) -> bool:
-        """Check git installation"""
-        try:
-            subprocess.run('git -v')
-            return True
-        except FileNotFoundError:
-            self.exit_code.setText('Git not installed')
-            return False
-
     def git_open(self) -> None:
         """Open git repository on computer"""
-        if self.git_check():
+        if GIT_INSTALLED:
             path: str = QFileDialog.getExistingDirectory(directory=user)
             if path:
                 try:
@@ -1486,25 +1476,31 @@ class IdeWindow(QMainWindow):
                         self.add_git_tab(path)
                 except git.InvalidGitRepositoryError:
                     self.exit_code.setText(f'Not git repo {path}')
+        else:
+            self.exit_code.setText('Git not installed')
 
     def git_init(self) -> None:
         """Initialize new git repository"""
-        if self.git_check():
+        if GIT_INSTALLED:
             path: str = QFileDialog.getExistingDirectory(directory=user)
             if path:
                 git.Repo.init(path)
                 self.add_git_tab(path)
                 self.exit_code.setText(f'Initialize repository {path}')
+        else:
+            self.exit_code.setText('Git not installed')
 
     def git_clone(self) -> None:
         """Clone git repository from url"""
-        if self.git_check():
+        if GIT_INSTALLED:
             git_file: InputDialog = InputDialog('File', 'File', self)
             git_file.exec()
             if git_file.text_value():
                 path: str = QFileDialog.getExistingDirectory(directory=user)
                 if path:
                     git.Repo.clone_from(git_file.text_value(), path)
+        else:
+            self.exit_code.setText('Git not installed')
 
     def dragEnterEvent(self, event: QDragEnterEvent) -> None:
         mime: QMimeData = event.mimeData()
