@@ -28,6 +28,8 @@ font_sz_menu = {'en': 'Font scale', 'ru': 'Масштаб шрифта', 'de': '
 open_uns_btn = {'en': 'Open in other program', 'ru': 'Открыть в другой программе',
                 'de': 'In einem anderen Programm öffnen', 'ch': '在其他程序中打开'}
 find_btn = {'en': 'Find', 'ru': 'Поиск', 'de': 'Finden', 'ch': '寻找'}
+find_highlight_btn = {'en': 'Find highlight', 'ru': 'Поиск подсветки', 'de': 'Highlight finden', 'ch': '寻找亮点'}
+find_start_btn = {'en': 'Find compiler', 'ru': 'Поиск компилятора', 'de': 'Compiler finden', 'ch': '查找编译器'}
 
 autorun = {'en': 'Autorun', 'ru': 'Автозагрузка', 'de': 'Automatisch laden', 'ch': '自动加载'}
 autosave = {'en': 'Autosave', 'ru': 'Автосохранение', 'de': 'Automatisches Speichern', 'ch': '自动保存'}

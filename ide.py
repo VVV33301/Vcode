@@ -22,8 +22,8 @@ import re
 import json
 import shutil
 from webbrowser import open as openweb
-from os import mkdir, system, remove, getpid, rename
-from os.path import isfile, isdir, dirname, abspath, join, exists, expanduser
+from os import mkdir, system, remove, getpid, rename, startfile
+from os.path import isfile, isdir, dirname, abspath, join, exists
 from requests import get
 import psutil
 
@@ -33,6 +33,7 @@ from PyQt6.QtGui import *
 
 import texts
 from style import STYLE
+from default import USER, ENCODINGS
 
 try:
     import git
@@ -41,7 +42,7 @@ except ImportError:
     git = None
     GIT_INSTALLED: bool = False
 
-VERSION: str = '0.6.0'
+VERSION: str = '0.6.1'
 
 
 def resource_path(relative_path: str) -> str:
@@ -70,47 +71,39 @@ def update_filters() -> list[str]:
     return filters_f
 
 
-user: str = expanduser('~')
-encodings: list[str] = ['ascii', 'big5', 'big5hkscs', 'cp037', 'cp1006', 'cp1026', 'cp1125', 'cp1140', 'cp1250',
-                        'cp1251', 'cp1252', 'cp1253', 'cp1254', 'cp1255', 'cp1256', 'cp1257', 'cp1258', 'cp273',
-                        'cp424', 'cp437', 'cp500', 'cp720', 'cp737', 'cp775', 'cp850', 'cp852', 'cp855', 'cp856',
-                        'cp857', 'cp858', 'cp860', 'cp861', 'cp862', 'cp863', 'cp864', 'cp865', 'cp866', 'cp869',
-                        'cp874', 'cp875', 'cp932', 'cp949', 'cp950', 'euc_jis_2004', 'euc_jisx0213', 'euc_jp', 'euc_kr',
-                        'gb18030', 'gb2312', 'gbk', 'hz', 'iso2022_jp', 'iso2022_jp_1', 'iso2022_jp_2',
-                        'iso2022_jp_2004', 'iso2022_jp_3', 'iso2022_jp_ext', 'iso2022_kr', 'iso8859-1', 'iso8859-10',
-                        'iso8859-11', 'iso8859-13', 'iso8859-14', 'iso8859-15', 'iso8859-16', 'iso8859-2', 'iso8859-3',
-                        'iso8859-4', 'iso8859-5', 'iso8859-6', 'iso8859-7', 'iso8859-8', 'iso8859-9', 'johab', 'koi8-r',
-                        'koi8-t', 'koi8-u', 'kz1048', 'mac-cyrillic', 'mac-greek', 'mac-iceland', 'mac-latin2',
-                        'mac-roman', 'mac-turkish', 'ptcp154', 'shift_jis', 'shift_jis_2004', 'shift_jisx0213',
-                        'utf-16', 'utf-16-be', 'utf-16-le', 'utf-32', 'utf-32-be', 'utf-32-le', 'utf-7', 'utf-8',
-                        'utf-8-sig']
-if exists(user + '/.Vcode/'):
-    with open(user + '/.Vcode/languages.json') as llf:
+if exists(USER + '/.Vcode/languages.json'):
+    with open(USER + '/.Vcode/languages.json') as llf:
         language_list: dict[str, dict[str, str]] = json.load(llf)
     if 'Python' not in language_list.keys():
         from default import python_ll
-
         language_list["Python"] = python_ll
-        with open(user + '/.Vcode/languages.json', 'w') as llf:
+        with open(USER + '/.Vcode/languages.json', 'w') as llf:
             json.dump(language_list, llf)
     if 'Html' not in language_list.keys():
         from default import html_ll
-
         language_list["Html"] = html_ll
-        with open(user + '/.Vcode/languages.json', 'w') as llf:
+        with open(USER + '/.Vcode/languages.json', 'w') as llf:
+            json.dump(language_list, llf)
+    if 'JSON' not in language_list.keys():
+        from default import json_ll
+        language_list["JSON"] = json_ll
+        with open(USER + '/.Vcode/languages.json', 'w') as llf:
             json.dump(language_list, llf)
 else:
-    from default import *
-
-    language_list: dict[str, dict[str, str]] = {"Python": python_ll, "Html": html_ll}
-    mkdir(user + '/.Vcode/')
-    with open(user + '/.Vcode/languages.json', 'w') as llf:
+    from default import python_ll, html_ll, json_ll, python_hl, html_hl, json_hl
+    language_list: dict[str, dict[str, str]] = {"Python": python_ll, "Html": html_ll, "JSON": json_ll}
+    if not exists(USER + '/.Vcode/'):
+        mkdir(USER + '/.Vcode/')
+    with open(USER + '/.Vcode/languages.json', 'w') as llf:
         json.dump(language_list, llf)
-    mkdir(user + '/.Vcode/highlights')
-    with open(user + '/.Vcode/highlights/python.hl', 'w') as llf:
+    if not exists(USER + '/.Vcode/highlights/'):
+        mkdir(USER + '/.Vcode/highlights/')
+    with open(USER + '/.Vcode/highlights/python.hl', 'w') as llf:
         llf.write(python_hl)
-    with open(user + '/.Vcode/highlights/html.hl', 'w') as llf:
+    with open(USER + '/.Vcode/highlights/html.hl', 'w') as llf:
         llf.write(html_hl)
+    with open(USER + '/.Vcode/highlights/json.hl', 'w') as llf:
+        llf.write(json_hl)
 
 
 class Highlighter(QSyntaxHighlighter):
@@ -612,7 +605,7 @@ class EditorTab(QPlainTextEdit):
             self.setPlainText(texts.unsupported_encoding[self.pr_settings.value('Language')])
             self.te: QPushButton = QPushButton(texts.open_uns_btn[self.pr_settings.value('Language')], self)
             self.te.setGeometry(50, self.font().pointSize() + 20, 200, 30)
-            self.te.clicked.connect(self.open_file)
+            self.te.clicked.connect(lambda: startfile(self.file))
             self.setReadOnly(True)
             self.save = lambda: None
             self.line_num.setVisible(False)
@@ -631,14 +624,6 @@ class EditorTab(QPlainTextEdit):
         with open(self.file, 'w', encoding=self.pr_settings.value('Encoding')) as sf:
             sf.write(self.toPlainText())
         self.saved_text: str = self.toPlainText()
-
-    def open_file(self):
-        if sys.platform == 'win32':
-            system(f'start "" "{self.file}"')
-        elif sys.platform.startswith('linux'):
-            system(f'xdg-open "{self.file}"')
-        else:
-            self.setPlainText('Can`t open tis file in this operating system')
 
     def line_number_area_width(self) -> int:
         """Return sizes of text area"""
@@ -1126,7 +1111,7 @@ class IdeWindow(QMainWindow):
 
         if not self.options.allKeys():
             self.options.setValue('Splitter', [225, 775])
-            self.options.setValue('Folder', user)
+            self.options.setValue('Folder', USER)
             self.options.setValue('Geometry', 'Not init')
         self.splitter.setSizes(map(int, self.options.value('Splitter')))
 
@@ -1175,6 +1160,7 @@ class IdeWindow(QMainWindow):
 
     def check_updates(self) -> None:
         """Checking for updates"""
+
         def check():
             try:
                 if VERSION not in get('https://github.com/VVV33301/Vcode/releases/latest').text.split('title>')[1]:
@@ -1381,7 +1367,7 @@ class IdeWindow(QMainWindow):
         if code.language in language_list.keys():
             tid: str = str(threading.current_thread().native_id)
             if sys.platform == 'win32':
-                with open(f'{user}/.Vcode/process_{tid}.bat', 'w', encoding='utf-8') as bat_win32:
+                with open(f'{USER}/.Vcode/process_{tid}.bat', 'w', encoding='utf-8') as bat_win32:
                     bat_win32.write(f'''
                               @echo off
                               chcp 65001>nul
@@ -1392,13 +1378,13 @@ class IdeWindow(QMainWindow):
                               echo %errorlevel% > {fnm}.output
                               pause
                               ''')
-                process: subprocess.Popen = subprocess.Popen(f'{user}/.Vcode/process_{tid}.bat',
+                process: subprocess.Popen = subprocess.Popen(f'{USER}/.Vcode/process_{tid}.bat',
                                                              creationflags=subprocess.CREATE_NEW_CONSOLE,
                                                              process_group=subprocess.CREATE_NEW_PROCESS_GROUP)
                 process.wait()
-                remove(f'{user}/.Vcode/process_{tid}.bat')
+                remove(f'{USER}/.Vcode/process_{tid}.bat')
             elif sys.platform.startswith('linux'):
-                with open(f'{user}/.Vcode/process_{tid}.sh', 'w', encoding='utf-8') as bat_linux:
+                with open(f'{USER}/.Vcode/process_{tid}.sh', 'w', encoding='utf-8') as bat_linux:
                     bat_linux.write(f'''
                               #!/bin/bash
                               cd {pth}
@@ -1409,11 +1395,11 @@ class IdeWindow(QMainWindow):
                               echo $ec > {fnm}.output
                               read -r -p "Press enter to continue..." key
                               ''')
-                system(f'chmod +x {resource_path(f"{user}/.Vcode/process_{tid}.sh")}')
-                process: subprocess.Popen = subprocess.Popen(resource_path(f"{user}/.Vcode/process_{tid}.sh"),
+                system(f'chmod +x {resource_path(f"{USER}/.Vcode/process_{tid}.sh")}')
+                process: subprocess.Popen = subprocess.Popen(resource_path(f"{USER}/.Vcode/process_{tid}.sh"),
                                                              shell=True)
                 process.wait()
-                remove(f'{user}/.Vcode/process_{tid}.sh')
+                remove(f'{USER}/.Vcode/process_{tid}.sh')
             else:
                 with open(f'{pth}/{fnm}.output', 'w') as bat_w:
                     bat_w.write('Can`t start terminal in this operating system')
@@ -1469,7 +1455,7 @@ class IdeWindow(QMainWindow):
     def git_open(self) -> None:
         """Open git repository on computer"""
         if GIT_INSTALLED:
-            path: str = QFileDialog.getExistingDirectory(directory=user)
+            path: str = QFileDialog.getExistingDirectory(directory=USER)
             if path:
                 try:
                     if git.Repo(path).git_dir:
@@ -1482,7 +1468,7 @@ class IdeWindow(QMainWindow):
     def git_init(self) -> None:
         """Initialize new git repository"""
         if GIT_INSTALLED:
-            path: str = QFileDialog.getExistingDirectory(directory=user)
+            path: str = QFileDialog.getExistingDirectory(directory=USER)
             if path:
                 git.Repo.init(path)
                 self.add_git_tab(path)
@@ -1496,7 +1482,7 @@ class IdeWindow(QMainWindow):
             git_file: InputDialog = InputDialog('File', 'File', self)
             git_file.exec()
             if git_file.text_value():
-                path: str = QFileDialog.getExistingDirectory(directory=user)
+                path: str = QFileDialog.getExistingDirectory(directory=USER)
                 if path:
                     git.Repo.clone_from(git_file.text_value(), path)
         else:
@@ -1589,7 +1575,7 @@ class SettingsDialog(QDialog):
         self.check_boxes_layout.addWidget(self.tab_size)
 
         self.encoding: QComboBox = QComboBox(self)
-        self.encoding.addItems(encodings)
+        self.encoding.addItems(ENCODINGS)
         self.check_boxes_layout.addWidget(self.encoding)
 
         self.languages_list: QListWidget = QListWidget(self)
@@ -1635,7 +1621,7 @@ class SettingsDialog(QDialog):
         """Remove a language"""
         name: QListWidgetItem = self.languages_list.selectedItems()[0]
         del language_list[name.text()]
-        with open(resource_path('files/languages.json'), 'w') as llfw:
+        with open(USER + '/.Vcode/languages.json', 'w') as llfw:
             json.dump(language_list, llfw)
         self.languages_list.takeItem(self.languages_list.row(name))
 
@@ -1645,7 +1631,7 @@ class SettingsDialog(QDialog):
         name.exec()
         if name.text_value():
             language_list[name.text_value()] = {"highlight": "", "file_formats": [], "start_command": ""}
-            with open(resource_path('files/languages.json'), 'w') as llfw:
+            with open(USER + '/.Vcode/languages.json', 'w') as llfw:
                 json.dump(language_list, llfw)
         self.languages_list.addItem(QListWidgetItem(name.text_value(), self.languages_list))
 
@@ -1670,11 +1656,13 @@ class AboutDialog(QDialog):
         self.name.setFont(QFont('Arial', 18))
         layout.addWidget(self.name, alignment=Qt.AlignmentFlag.AlignHCenter)
 
-        self.text: QLabel = QLabel(f'Version: {VERSION}\n\nVladimir Varenik\nCopyright. All rights reserved', self)
+        self.text: QLabel = QLabel(f'Version: {VERSION}\n\nVladimir Varenik\n'
+                                   f'Copyright 2023-2024. All rights reserved\n'
+                                   f'This program is under GNU General Public License', self)
         layout.addWidget(self.text)
 
-        self.license: QLabel = QLabel('<a href="https://github.com/VVV33301/Vcode/blob/master/LICENSE.md">License</a>')
-        self.license.setOpenExternalLinks(True)
+        self.license: QPushButton = QPushButton('Read license', self)
+        self.license.clicked.connect(lambda: startfile(resource_path('LICENSE')))
         layout.addWidget(self.license)
 
 
@@ -1687,7 +1675,7 @@ class LanguageSettingsDialog(QDialog):
         self.language: str = language
         layout: QGridLayout = QGridLayout(self)
         self.setLayout(layout)
-        self.lang_s: QSettings = QSettings('Vcode', 'Settings')
+        self.lang_s: QSettings = QSettings('Vcode', 'Settings').value('Language')
 
         self.highlight: QLineEdit = QLineEdit(language_list[self.language]['highlight'], self)
         self.highlight.setPlaceholderText('Highlight file path')
@@ -1704,17 +1692,41 @@ class LanguageSettingsDialog(QDialog):
         self.start_command.contextMenuEvent = LineEditMenu(self.start_command)
         layout.addWidget(self.start_command, 2, 0, 1, 2)
 
-        self.edit_highlight_btn: QPushButton = QPushButton(texts.edit_highlight_btn[self.lang_s.value('Language')],
-                                                           self)
-        self.edit_highlight_btn.clicked.connect(self.highlight_maker_call)
-        layout.addWidget(self.edit_highlight_btn, 3, 0, 1, 1)
+        self.find_highlight: QPushButton = QPushButton(texts.find_highlight_btn[self.lang_s], self)
+        self.find_highlight.clicked.connect(self.find_highlight_file)
+        layout.addWidget(self.find_highlight, 3, 0, 1, 1)
 
-        self.save_btn: QPushButton = QPushButton(texts.save_btn[self.lang_s.value('Language')], self)
+        self.find_start: QPushButton = QPushButton(texts.find_start_btn[self.lang_s], self)
+        self.find_start.clicked.connect(self.find_compiler)
+        layout.addWidget(self.find_start, 3, 1, 1, 1)
+
+        self.edit_highlight_btn: QPushButton = QPushButton(texts.edit_highlight_btn[self.lang_s], self)
+        self.edit_highlight_btn.clicked.connect(self.highlight_maker_call)
+        layout.addWidget(self.edit_highlight_btn, 4, 0, 1, 1)
+
+        self.save_btn: QPushButton = QPushButton(texts.save_btn[self.lang_s], self)
         self.save_btn.clicked.connect(self.save_language)
-        layout.addWidget(self.save_btn, 3, 1, 1, 1)
+        layout.addWidget(self.save_btn, 4, 1, 1, 1)
+
+    def find_highlight_file(self):
+        """Search highlight file in all files"""
+        a, _ = QFileDialog.getOpenFileName(self, directory=USER, filter='Highlight files (*.hl)')
+        if a:
+            self.highlight.setText(a)
+
+    def find_compiler(self):
+        """Search compiler in files"""
+        a, _ = QFileDialog.getOpenFileName(
+            self, directory=USER, filter='Executable files (*.exe);;Shell files (*.sh *.bat *.vbs);;All files (*.*)')
+        if a:
+            self.start_command.setText(f'"{a}" "{{filename}}"')
 
     def highlight_maker_call(self) -> None:
         """Start highlight maker"""
+        if not language_list[self.language]['highlight']:
+            with open(USER + './Vcode/highlights/' + self.language.lower() + '.hl', 'w') as hn:
+                hn.write('[A-Za-z0-9]+ = {"foreground": [127, 127, 127]};')
+            language_list[self.language]['highlight'] = USER + './Vcode/highlights/' + self.language.lower() + '.hl'
         hlm: HighlightMaker = HighlightMaker(language_list[self.language]['highlight'], self)
         hlm.setWindowTitle(f'{language_list[self.language]["highlight"].split("/")[-1]} - Vcode highlight maker')
         hlm.exec()
@@ -1724,8 +1736,9 @@ class LanguageSettingsDialog(QDialog):
         language_list[self.language]: dict[str, str] = {'highlight': self.highlight.text(),
                                                         'file_formats': [f for f in self.file_formats.text().split()],
                                                         'start_command': self.start_command.text()}
-        with open(resource_path('files/languages.json'), 'w') as llfw:
+        with open(USER + '/.Vcode/languages.json', 'w') as llfw:
             json.dump(language_list, llfw)
+        self.accept()
 
 
 class HighlightMaker(QDialog):
@@ -1768,6 +1781,7 @@ if __name__ == '__main__':
     app.setWindowIcon(QIcon(resource_path('Vcode.ico')))
     ide: IdeWindow = IdeWindow()
     ide.settings_window.autorun.setEnabled(False)
+    ide.settings_window.autorun.setStyleSheet('font: italic;')
     if ide.settings.value('Recent') == 1:
         last: QSettings = QSettings('Vcode', 'Last')
         for n in last.allKeys():
@@ -1782,7 +1796,7 @@ if __name__ == '__main__':
     for arg in sys.argv[1:]:
         if isfile(arg):
             if not arg.endswith('.hl'):
-                ide.add_tab(arg)
+                ide.add_tab(arg.replace('\\', '/'))
             else:
                 hm: HighlightMaker = HighlightMaker(arg)
                 hm.setWindowTitle(f'{arg} - Vcode highlight maker')

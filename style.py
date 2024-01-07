@@ -75,7 +75,7 @@ STYLE = {
             border-style: solid;
             background-color: rgb(65, 65, 75);
             height: 1.8em;
-            width: 4.2em;
+            width: 5em;
         }
         QAbstractButton:hover {
             background-color: rgb(90, 90, 100);
@@ -162,7 +162,7 @@ STYLE = {
             border-style: solid;
             background-color: rgb(220, 220, 190);
             height: 1.8em;
-            width: 4.2em;
+            width: 5em;
         }
         QAbstractButton:hover {
             background-color: rgb(185, 185, 174);
@@ -261,7 +261,7 @@ STYLE = {
             border-style: solid;
             background-color: rgb(0, 0, 0);
             height: 1.8em;
-            width: 4.2em;
+            width: 5em;
         }
         QAbstractButton:hover {
             background-color: rgb(5, 5, 5);
