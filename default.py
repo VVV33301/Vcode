@@ -37,15 +37,18 @@ json_hl: str = r'''\b\d+(\.\d+)? = {"foreground": [30, 180, 210]};
 python_ll: dict[str, str] = {
     "highlight": f"{USER}/.Vcode/highlights/python.hl",
     "file_formats": ["py", "pyw", "pyi"],
-    "start_command": "python \"{filename}\""
+    "start_command": "python \"{filename}\"",
+    "debug_command": "python -m pdb \"{filename}\""
 }
 html_ll: dict[str, str] = {
     "highlight": f"{USER}/.Vcode/highlights/html.hl",
     "file_formats": ["htm", "html"],
-    "start_command": "start \"\" \"{filename}\""
+    "start_command": "start \"\" \"{filename}\"",
+    "debug_command": ""
 }
 json_ll: dict[str, str] = {
     "highlight": f"{USER}/.Vcode/highlights/json.hl",
     "file_formats": ["json"],
-    "start_command": ""
+    "start_command": "",
+    "debug_command": ""
 }

@@ -37,6 +37,7 @@ from default import USER, ENCODINGS
 
 try:
     import git
+
     GIT_INSTALLED: bool = True
 except ImportError:
     git = None
@@ -76,21 +77,25 @@ if exists(USER + '/.Vcode/languages.json'):
         language_list: dict[str, dict[str, str]] = json.load(llf)
     if 'Python' not in language_list.keys():
         from default import python_ll
+
         language_list["Python"] = python_ll
         with open(USER + '/.Vcode/languages.json', 'w') as llf:
             json.dump(language_list, llf)
     if 'Html' not in language_list.keys():
         from default import html_ll
+
         language_list["Html"] = html_ll
         with open(USER + '/.Vcode/languages.json', 'w') as llf:
             json.dump(language_list, llf)
     if 'JSON' not in language_list.keys():
         from default import json_ll
+
         language_list["JSON"] = json_ll
         with open(USER + '/.Vcode/languages.json', 'w') as llf:
             json.dump(language_list, llf)
 else:
     from default import python_ll, html_ll, json_ll, python_hl, html_hl, json_hl
+
     language_list: dict[str, dict[str, str]] = {"Python": python_ll, "Html": html_ll, "JSON": json_ll}
     if not exists(USER + '/.Vcode/'):
         mkdir(USER + '/.Vcode/')
@@ -242,8 +247,13 @@ class TextEditMenu(QMenu):
 
         self.start: QAction = QAction(self)
         self.start.triggered.connect(ide.start_program)
-        self.start.setShortcut(QKeySequence.StandardKey.Refresh)
+        self.start.setShortcut('F5')
         self.addAction(self.start)
+
+        self.debug: QAction = QAction(self)
+        self.debug.triggered.connect(ide.debug_program)
+        self.debug.setShortcut('Shift+F5')
+        self.addAction(self.debug)
 
         self.addSeparator()
 
@@ -272,6 +282,7 @@ class TextEditMenu(QMenu):
         self.select_all.setText(texts.select_all[lang])
         self.find.setText(texts.find_btn[lang])
         self.start.setText(texts.start_btn[lang])
+        self.debug.setText(texts.debug_btn[lang])
         self.search.setTitle(texts.search[lang])
         self.search_in_g.setText(texts.search_in_g[lang])
         self.search_in_so.setText(texts.search_in_so[lang])
@@ -350,6 +361,10 @@ class TreeViewMenu(QMenu):
         self.rename_btn.triggered.connect(self.rename_file)
         self.addAction(self.rename_btn)
 
+        self.open_in_btn: QAction = QAction(self)
+        self.open_in_btn.triggered.connect(self.open_in_explorer)
+        self.addAction(self.open_in_btn)
+
         self.lang_s: QSettings = QSettings('Vcode', 'Settings')
 
     def __call__(self, event: QContextMenuEvent) -> None:
@@ -359,6 +374,7 @@ class TreeViewMenu(QMenu):
         self.paste_btn.setText(texts.paste[lang])
         self.delete_btn.setText(texts.delete_btn[lang])
         self.rename_btn.setText(texts.rename_btn[lang])
+        self.open_in_btn.setText(texts.open_in_btn[lang])
         self.popup(event.globalPos())
 
     def new_file(self) -> None:
@@ -375,10 +391,13 @@ class TreeViewMenu(QMenu):
                 self.c.add_tab(x)
 
     def copy_file(self) -> None:
-        """Copy file to clipboard (not working)"""
-        n: str = self.c.model.filePath(self.c.tree.selectedIndexes()[0])
-        if (isfile(n) or isdir(n)) and sys.platform == 'win32':
-            system(f'powershell -command "Set-Clipboard -Path "{n}""')
+        """Copy file to clipboard"""
+        md: QMimeData = QMimeData()
+        ls: list[QUrl] = []
+        for i in self.c.tree.selectedIndexes():
+            ls.append(QUrl('file:///' + self.c.model.filePath(i)))
+        md.setUrls(ls)
+        app.clipboard().setMimeData(md)
 
     def paste_file(self) -> None:
         """Paste file from clipboard"""
@@ -410,6 +429,16 @@ class TreeViewMenu(QMenu):
                 rename(path + '/' + name, path + '/' + file.text_value())
             except Exception:
                 pass
+
+    def open_in_explorer(self) -> None:
+        """Open file or directory in explorer"""
+        pth: str = self.c.model.filePath(self.c.tree.selectedIndexes()[0]).replace('/', '\\')
+        if isfile(pth):
+            pth = pth.rsplit('\\', maxsplit=1)[0]
+        if sys.platform == 'win32':
+            system(f'explorer "{pth}"')
+        elif sys.platform.startswith('linux'):
+            system(f'xdg-open "{pth}"')
 
 
 class LineEditMenu(QMenu):
@@ -612,6 +641,7 @@ class EditorTab(QPlainTextEdit):
         self.saved_text: str = self.toPlainText()
         self.highlighter: Highlighter | None = None
         self.start_command: str | None = None
+        self.debug_command: str | None = None
         self.language: str = ''
 
     def set_highlighter(self, highlighter: Highlighter) -> None:
@@ -945,9 +975,14 @@ class IdeWindow(QMainWindow):
         self.addToolBar(Qt.ToolBarArea.BottomToolBarArea, self.tool_bar)
 
         self.start_btn: QAction = QAction(self)
-        self.start_btn.setShortcut(QKeySequence.StandardKey.Refresh)
+        self.start_btn.setShortcut('F5')
         self.start_btn.triggered.connect(self.start_program)
         self.tool_bar.addAction(self.start_btn)
+
+        self.debug_btn: QAction = QAction(self)
+        self.debug_btn.setShortcut('Shift+F5')
+        self.debug_btn.triggered.connect(self.debug_program)
+        self.tool_bar.addAction(self.debug_btn)
 
         self.tool_bar.addSeparator()
         self.exit_code: QLabel = QLabel('-')
@@ -980,6 +1015,8 @@ class IdeWindow(QMainWindow):
         self.open_btn.triggered.connect(self.open_file)
         self.file_menu.addAction(self.open_btn)
 
+        self.file_menu.addSeparator()
+
         self.save_btn: QAction = QAction(self)
         self.save_btn.setShortcut(QKeySequence.StandardKey.Save)
         self.save_btn.triggered.connect(self.save_file)
@@ -989,6 +1026,13 @@ class IdeWindow(QMainWindow):
         self.save_as_btn.setShortcut(QKeySequence.StandardKey.SaveAs)
         self.save_as_btn.triggered.connect(self.save_as)
         self.file_menu.addAction(self.save_as_btn)
+
+        self.file_menu.addSeparator()
+
+        self.exit_btn: QAction = QAction(self)
+        self.exit_btn.setShortcut('Alt+F4')
+        self.exit_btn.triggered.connect(self.close)
+        self.file_menu.addAction(self.exit_btn)
 
         self.edit_menu: QMenu = QMenu(self)
         self.edit_menu.setEnabled(False)
@@ -1147,6 +1191,9 @@ class IdeWindow(QMainWindow):
         self.show_ide()
         self.check_updates()
 
+        self.position_code.setText('')
+        self.selection_code.setText('')
+
     def show_ide(self) -> None:
         """Show main ide window"""
         if self.options.value('Geometry') == 'Maximized':
@@ -1230,6 +1277,7 @@ class IdeWindow(QMainWindow):
             if filename.rsplit('.', maxsplit=1)[-1] in language['file_formats']:
                 editor.set_highlighter(Highlighter(resource_path(language['highlight'])))
                 editor.start_command = language['start_command']
+                editor.debug_command = language['debug_command']
                 editor.language = langname
         if row is None:
             self.editor_tabs.setCurrentIndex(self.editor_tabs.addTab(editor, editor.filename))
@@ -1294,8 +1342,10 @@ class IdeWindow(QMainWindow):
         self.open_btn.setText(texts.open_btn[language])
         self.save_btn.setText(texts.save_btn[language])
         self.save_as_btn.setText(texts.save_as_btn[language])
+        self.exit_btn.setText(texts.exit_btn[language])
         self.settings_btn.setText(texts.settings_btn[language])
         self.start_btn.setText(texts.start_btn[language])
+        self.debug_btn.setText(texts.debug_btn[language])
         self.terminal_btn.setText(texts.terminal_btn[language])
         self.about_menu.setTitle(texts.about_menu[language])
         self.about_btn.setText(texts.about_btn[language])
@@ -1359,13 +1409,26 @@ class IdeWindow(QMainWindow):
                     self.editor_tabs.currentWidget().save()
             threading.Thread(target=self.program).start()
 
-    def program(self) -> None:
+    def debug_program(self):
+        """Debug code from current tab"""
+        if self.editor_tabs.count():
+            if not self.settings.value('Autosave') and \
+                    self.editor_tabs.currentWidget().saved_text != self.editor_tabs.currentWidget().toPlainText():
+                button_text: str = WarningMessageBox(self, 'Warning', texts.save_warning).wait()
+                if button_text in texts.cancel_btn.values():
+                    return
+                elif button_text in texts.save_btn.values():
+                    self.editor_tabs.currentWidget().save()
+            threading.Thread(target=self.program, args=[True]).start()
+
+    def program(self, debug: bool = False) -> None:
         """Code working process"""
         code: EditorTab = self.editor_tabs.currentWidget()
         pth: str = code.path
         fnm: str = code.filename
         if code.language in language_list.keys():
             tid: str = str(threading.current_thread().native_id)
+            command: str = code.start_command if not debug else code.debug_command
             if sys.platform == 'win32':
                 with open(f'{USER}/.Vcode/process_{tid}.bat', 'w', encoding='utf-8') as bat_win32:
                     bat_win32.write(f'''
@@ -1373,7 +1436,7 @@ class IdeWindow(QMainWindow):
                               chcp 65001>nul
                               cd {pth}
                               echo Interrupted > {fnm}.output
-                              {code.start_command.format(filename=fnm)}
+                              {command.format(filename=fnm)}
                               echo Exit code: %errorlevel% 
                               echo %errorlevel% > {fnm}.output
                               pause
@@ -1389,7 +1452,7 @@ class IdeWindow(QMainWindow):
                               #!/bin/bash
                               cd {pth}
                               echo "Interrupted" > {fnm}.output
-                              {code.start_command.format(filename=fnm)}
+                              {command.format(filename=fnm)}
                               ec=$?
                               echo "Exit code: $ec"
                               echo $ec > {fnm}.output
@@ -1419,8 +1482,8 @@ class IdeWindow(QMainWindow):
 
     def new_file(self) -> None:
         """Create new file"""
-        file, _ = QFileDialog.getSaveFileName(directory=self.options.value('Folder') + '/untitled',
-                                              filter=';;'.join(update_filters()))
+        file: str = QFileDialog.getSaveFileName(directory=self.options.value('Folder') + '/untitled',
+                                                filter=';;'.join(update_filters()))[0]
         if file:
             self.options.setValue('Folder', file.rsplit('/', maxsplit=1)[0])
             open(file, 'w', encoding=self.settings.value('Encoding')).close()
@@ -1428,8 +1491,8 @@ class IdeWindow(QMainWindow):
 
     def open_file(self) -> None:
         """Open file"""
-        file, _ = QFileDialog.getOpenFileName(directory=self.options.value('Folder'),
-                                              filter=';;'.join(update_filters()))
+        file: str = QFileDialog.getOpenFileName(directory=self.options.value('Folder'),
+                                                filter=';;'.join(update_filters()))[0]
         if file:
             self.options.setValue('Folder', file.rsplit('/', maxsplit=1)[0])
             self.add_tab(file)
@@ -1610,7 +1673,7 @@ class SettingsDialog(QDialog):
         if item:
             self.remove_btn.setText(texts.remove_btn[QSettings('Vcode', 'Settings').value('Language')])
             menu.addAction(self.remove_btn)
-            if item.text() in ['Python', 'Html']:
+            if item.text() in ['Python', 'Html', 'JSON']:
                 menu.setEnabled(False)
         else:
             self.add_btn.setText(texts.add_btn[QSettings('Vcode', 'Settings').value('Language')])
@@ -1665,13 +1728,16 @@ class AboutDialog(QDialog):
         self.license.clicked.connect(lambda: startfile(resource_path('LICENSE')))
         layout.addWidget(self.license)
 
+        self.text2: QLabel = QLabel('This program powered by PyQt6', self)
+        layout.addWidget(self.text2)
+
 
 class LanguageSettingsDialog(QDialog):
     """Settings of programming languages"""
 
     def __init__(self, language: str, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
-        self.setMinimumSize(350, 150)
+        self.setMinimumSize(400, 250)
         self.language: str = language
         layout: QGridLayout = QGridLayout(self)
         self.setLayout(layout)
@@ -1680,33 +1746,42 @@ class LanguageSettingsDialog(QDialog):
         self.highlight: QLineEdit = QLineEdit(language_list[self.language]['highlight'], self)
         self.highlight.setPlaceholderText('Highlight file path')
         self.highlight.contextMenuEvent = LineEditMenu(self.highlight)
-        layout.addWidget(self.highlight, 0, 0, 1, 2)
+        layout.addWidget(self.highlight, 0, 0, 1, 6)
 
         self.file_formats: QLineEdit = QLineEdit(' '.join(language_list[self.language]['file_formats']), self)
         self.file_formats.setPlaceholderText('Supported file formats')
         self.file_formats.contextMenuEvent = LineEditMenu(self.file_formats)
-        layout.addWidget(self.file_formats, 1, 0, 1, 2)
+        layout.addWidget(self.file_formats, 1, 0, 1, 6)
 
         self.start_command: QLineEdit = QLineEdit(language_list[self.language]['start_command'], self)
         self.start_command.setPlaceholderText('Start command')
         self.start_command.contextMenuEvent = LineEditMenu(self.start_command)
-        layout.addWidget(self.start_command, 2, 0, 1, 2)
+        layout.addWidget(self.start_command, 2, 0, 1, 6)
+
+        self.debug_command: QLineEdit = QLineEdit(language_list[self.language]['debug_command'], self)
+        self.debug_command.setPlaceholderText('Debug command')
+        self.debug_command.contextMenuEvent = LineEditMenu(self.debug_command)
+        layout.addWidget(self.debug_command, 3, 0, 1, 6)
 
         self.find_highlight: QPushButton = QPushButton(texts.find_highlight_btn[self.lang_s], self)
         self.find_highlight.clicked.connect(self.find_highlight_file)
-        layout.addWidget(self.find_highlight, 3, 0, 1, 1)
+        layout.addWidget(self.find_highlight, 4, 0, 1, 2)
 
         self.find_start: QPushButton = QPushButton(texts.find_start_btn[self.lang_s], self)
         self.find_start.clicked.connect(self.find_compiler)
-        layout.addWidget(self.find_start, 3, 1, 1, 1)
+        layout.addWidget(self.find_start, 4, 2, 1, 2)
+
+        self.find_debug: QPushButton = QPushButton(texts.find_debug_btn[self.lang_s], self)
+        self.find_debug.clicked.connect(self.find_debugger)
+        layout.addWidget(self.find_debug, 4, 4, 1, 2)
 
         self.edit_highlight_btn: QPushButton = QPushButton(texts.edit_highlight_btn[self.lang_s], self)
         self.edit_highlight_btn.clicked.connect(self.highlight_maker_call)
-        layout.addWidget(self.edit_highlight_btn, 4, 0, 1, 1)
+        layout.addWidget(self.edit_highlight_btn, 5, 0, 1, 3)
 
         self.save_btn: QPushButton = QPushButton(texts.save_btn[self.lang_s], self)
         self.save_btn.clicked.connect(self.save_language)
-        layout.addWidget(self.save_btn, 4, 1, 1, 1)
+        layout.addWidget(self.save_btn, 5, 3, 1, 3)
 
     def find_highlight_file(self):
         """Search highlight file in all files"""
@@ -1716,6 +1791,13 @@ class LanguageSettingsDialog(QDialog):
 
     def find_compiler(self):
         """Search compiler in files"""
+        a, _ = QFileDialog.getOpenFileName(
+            self, directory=USER, filter='Executable files (*.exe);;Shell files (*.sh *.bat *.vbs);;All files (*.*)')
+        if a:
+            self.start_command.setText(f'"{a}" "{{filename}}"')
+
+    def find_debugger(self):
+        """Search debugger in files"""
         a, _ = QFileDialog.getOpenFileName(
             self, directory=USER, filter='Executable files (*.exe);;Shell files (*.sh *.bat *.vbs);;All files (*.*)')
         if a:

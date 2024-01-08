@@ -3,9 +3,11 @@ new_btn = {'en': 'New', 'ru': 'Создать', 'de': 'Erstellen', 'ch': '创造
 open_btn = {'en': 'Open', 'ru': 'Открыть', 'de': 'Offen', 'ch': '打开'}
 save_btn = {'en': 'Save', 'ru': 'Сохранить', 'de': 'Speichern', 'ch': '节省'}
 save_as_btn = {'en': 'Save as', 'ru': 'Сохранить как', 'de': 'Speichern als', 'ch': '另存为'}
+exit_btn = {'en': 'Exit', 'ru': 'Выход', 'de': 'Ausfahrt', 'ch': '出口'}
 settings_btn = {'en': 'Settings', 'ru': 'Настройки', 'de': 'Einstellungen', 'ch': '设置'}
 start_btn = {'en': 'Start', 'ru': 'Запустить', 'de': 'Start', 'ch': '开始'}
 terminal_btn = {'en': 'Terminal', 'ru': 'Терминал', 'de': 'Terminal', 'ch': '终端'}
+debug_btn = {'en': 'Debug', 'ru': 'Отладка', 'de': 'Debuggen', 'ch': '调试'}
 about_menu = {'en': 'About', 'ru': 'Справка', 'de': 'Referenz', 'ch': '参考'}
 about_btn = {'en': 'About program', 'ru': 'О программе', 'de': 'Über das Programm', 'ch': '关于该计划'}
 feedback_btn = {'en': 'Feedback', 'ru': 'Обратная связь', 'de': 'Rückmeldung', 'ch': '反馈'}
@@ -30,6 +32,9 @@ open_uns_btn = {'en': 'Open in other program', 'ru': 'Открыть в друг
 find_btn = {'en': 'Find', 'ru': 'Поиск', 'de': 'Finden', 'ch': '寻找'}
 find_highlight_btn = {'en': 'Find highlight', 'ru': 'Поиск подсветки', 'de': 'Highlight finden', 'ch': '寻找亮点'}
 find_start_btn = {'en': 'Find compiler', 'ru': 'Поиск компилятора', 'de': 'Compiler finden', 'ch': '查找编译器'}
+find_debug_btn = {'en': 'Find debugger', 'ru': 'Поиск отладчика', 'de': 'Debugger finden', 'ch': '查找调试器'}
+open_in_btn = {'en': 'Open in explorer', 'ru': 'Открыть в проводнике', 'de': 'Im Explorer öffnen',
+               'ch': '在资源管理器中打开'}
 
 autorun = {'en': 'Autorun', 'ru': 'Автозагрузка', 'de': 'Automatisch laden', 'ch': '自动加载'}
 autosave = {'en': 'Autosave', 'ru': 'Автосохранение', 'de': 'Automatisches Speichern', 'ch': '自动保存'}
