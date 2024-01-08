@@ -37,7 +37,6 @@ from default import USER, ENCODINGS
 
 try:
     import git
-
     GIT_INSTALLED: bool = True
 except ImportError:
     git = None
@@ -77,25 +76,21 @@ if exists(USER + '/.Vcode/languages.json'):
         language_list: dict[str, dict[str, str]] = json.load(llf)
     if 'Python' not in language_list.keys():
         from default import python_ll
-
         language_list["Python"] = python_ll
         with open(USER + '/.Vcode/languages.json', 'w') as llf:
             json.dump(language_list, llf)
     if 'Html' not in language_list.keys():
         from default import html_ll
-
         language_list["Html"] = html_ll
         with open(USER + '/.Vcode/languages.json', 'w') as llf:
             json.dump(language_list, llf)
     if 'JSON' not in language_list.keys():
         from default import json_ll
-
         language_list["JSON"] = json_ll
         with open(USER + '/.Vcode/languages.json', 'w') as llf:
             json.dump(language_list, llf)
 else:
     from default import python_ll, html_ll, json_ll, python_hl, html_hl, json_hl
-
     language_list: dict[str, dict[str, str]] = {"Python": python_ll, "Html": html_ll, "JSON": json_ll}
     if not exists(USER + '/.Vcode/'):
         mkdir(USER + '/.Vcode/')
@@ -109,6 +104,11 @@ else:
         llf.write(html_hl)
     with open(USER + '/.Vcode/highlights/json.hl', 'w') as llf:
         llf.write(json_hl)
+if not language_list['Python']['debug_command']:
+    from default import python_ll, html_ll, json_ll
+    language_list['Python']['debug_command'] = python_ll['debug_command']
+    language_list['Html']['debug_command'] = html_ll['debug_command']
+    language_list['JSON']['debug_command'] = json_ll['debug_command']
 
 
 class Highlighter(QSyntaxHighlighter):
