@@ -104,7 +104,7 @@ else:
         llf.write(html_hl)
     with open(USER + '/.Vcode/highlights/json.hl', 'w') as llf:
         llf.write(json_hl)
-if not language_list['Python']['debug_command']:
+if 'debug_command' not in language_list['Python'].keys():
     from default import python_ll, html_ll, json_ll
     language_list['Python']['debug_command'] = python_ll['debug_command']
     language_list['Html']['debug_command'] = html_ll['debug_command']
