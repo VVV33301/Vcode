@@ -109,6 +109,8 @@ if 'debug_command' not in language_list['Python'].keys():
     language_list['Python']['debug_command'] = python_ll['debug_command']
     language_list['Html']['debug_command'] = html_ll['debug_command']
     language_list['JSON']['debug_command'] = json_ll['debug_command']
+    with open(USER + '/.Vcode/languages.json', 'w') as llf:
+        json.dump(language_list, llf)
 
 
 class Highlighter(QSyntaxHighlighter):
@@ -402,7 +404,7 @@ class TreeViewMenu(QMenu):
     def paste_file(self) -> None:
         """Paste file from clipboard"""
         path: str = app.clipboard().mimeData().urls()[0].url().replace('file:///', '')
-        new_path = self.c.model.filePath(self.c.tree.selectedIndexes()[0])
+        new_path: str = self.c.model.filePath(self.c.tree.selectedIndexes()[0])
         if isdir(new_path):
             if isfile(path):
                 shutil.copy2(path, new_path + '/' + app.clipboard().mimeData().urls()[0].fileName())
