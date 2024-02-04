@@ -42,7 +42,7 @@ except ImportError:
     git = None
     GIT_INSTALLED: bool = False
 
-VERSION: str = '0.6.1'
+VERSION: str = '0.6.2'
 
 
 def resource_path(relative_path: str) -> str:
@@ -848,6 +848,22 @@ class LineNumberArea(QWidget):
         self.editor.update_line_event(event)
 
 
+class DockTab(QDockWidget):
+    def __init__(self, editor: EditorTab) -> None:
+        super().__init__()
+        self.editor: EditorTab = editor
+        self.setWidget(self.editor)
+        self.setWindowTitle(editor.filename)
+        self.topLevelChanged.connect(self.show_title)
+
+    def show_title(self):
+        print(self.editor.filename, self.isWindow(), self.isVisible(), self.hasFocus())
+        if True:
+            self.setTitleBarWidget(None)
+        else:
+            self.setTitleBarWidget(QLabel(self.editor.file))
+
+
 class TabWidget(QTabWidget):
     """Custom QTabWidget"""
 
@@ -928,6 +944,21 @@ class HighlightMakerString(QWidget):
         layout.addWidget(self.remove_btn)
 
 
+class TabArea(QMainWindow):
+    def __init__(self, parent: QWidget) -> None:
+        super().__init__(parent)
+        self.setTabPosition(Qt.DockWidgetArea.AllDockWidgetAreas, QTabWidget.TabPosition.North)
+        self.setDockOptions(QMainWindow.DockOption.AnimatedDocks | QMainWindow.DockOption.AllowTabbedDocks |
+                            QMainWindow.DockOption.AllowNestedDocks)
+        self.current: DockTab | None = None
+
+    def add_tab(self, tab: DockTab) -> None:
+        self.addDockWidget(Qt.DockWidgetArea.BottomDockWidgetArea, tab)
+        if self.current is not None:
+            self.tabifyDockWidget(self.current, tab)
+        self.current = tab
+
+
 class IdeWindow(QMainWindow):
     """Main app window"""
 
@@ -948,12 +979,20 @@ class IdeWindow(QMainWindow):
             st_rb.clicked.connect(lambda: self.select_style(self.sender().text()))
             self.settings_window.style_select_layout.addWidget(st_rb)
 
-        self.editor_tabs: TabWidget = TabWidget(self)
+        '''self.editor_tabs: TabWidget = TabWidget(self)
         self.editor_tabs.setTabsClosable(True)
         self.editor_tabs.setMovable(True)
         self.editor_tabs.tabCloseRequested.connect(self.close_tab)
         self.editor_tabs.currentChanged.connect(self.sel_tab)
-        self.editor_tabs.empty_widget.clicked.connect(self.open_file)
+        self.editor_tabs.empty_widget.clicked.connect(self.open_file)'''
+        '''tb = QTabBar(self)
+        tb.currentChanged.connect(lambda: print(tb.currentIndex(), tb.geometry()))
+        etpb = QVBoxLayout(self)'''
+        self.editor_tabs = TabArea(self)
+        '''etpb.addWidget(tb)
+        etpb.addWidget(self.editor_tabs)
+        w = QWidget(self)
+        w.setLayout(etpb)'''
 
         self.model: QFileSystemModel = QFileSystemModel(self)
         self.model.setRootPath('')
@@ -995,6 +1034,28 @@ class IdeWindow(QMainWindow):
         empty.setObjectName('empty')
         empty.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.tool_bar.addWidget(empty)
+
+        """# pr1 = subprocess.Popen('cmd', creationflags=subprocess.CREATE_NEW_CONSOLE, process_group=subprocess.CREATE_NEW_PROCESS_GROUP)
+        if sys.platform == 'win32':
+            from PyQt6.sip import voidptr
+            import win32gui, win32process
+            w = []
+
+            def enum_window_callback(hwnd, pid):
+                tid, current_pid = win32process.GetWindowThreadProcessId(hwnd)
+                if pid == current_pid and win32gui.IsWindowVisible(hwnd):
+                    w.append(hwnd)
+
+            win32gui.EnumWindows(enum_window_callback, [i for i in psutil.process_iter() if i.name() == 'WindowsTerminal.exe'][0].pid)
+            aa = QWindow.fromWinId(voidptr(w[0]))
+            print(aa.geometry())
+            '''aa.hide()
+            x = QWidget.createWindowContainer(aa)
+            x.showMaximized()
+            print(x.geometry())
+            print(x)'''
+        elif sys.platform.startswith('linux'):
+            system('xdotool search --any --pid 1234')"""
 
         self.position_code: QLabel = QLabel('0:0')
         self.position_code.setObjectName('exit_code')
@@ -1123,11 +1184,11 @@ class IdeWindow(QMainWindow):
         self.about_menu.addAction(self.about_btn)
 
         self.feedback_btn: QAction = QAction(self)
-        self.feedback_btn.triggered.connect(lambda: openweb('https://vcode.rf.gd/feedback'))
+        self.feedback_btn.triggered.connect(lambda: openweb('https://vcodeide.ru/feedback/'))
         self.about_menu.addAction(self.feedback_btn)
 
         self.download_btn: QAction = QAction(self)
-        self.download_btn.triggered.connect(lambda: openweb('https://vcode.rf.gd/download'))
+        self.download_btn.triggered.connect(lambda: openweb('https://vcodeide.ru/download/'))
 
         if len(self.settings.allKeys()) == 8:
             self.select_language(self.settings.value('Language'))
@@ -1212,7 +1273,7 @@ class IdeWindow(QMainWindow):
 
         def check():
             try:
-                if VERSION not in get('https://github.com/VVV33301/Vcode/releases/latest').text.split('title>')[1]:
+                if VERSION != get('https://version.vcodeide.ru/', verify=False).text:
                     self.menuBar().addAction(self.download_btn)
             except OSError:
                 pass
@@ -1281,11 +1342,13 @@ class IdeWindow(QMainWindow):
                 editor.start_command = language['start_command']
                 editor.debug_command = language['debug_command']
                 editor.language = langname
-        if row is None:
+
+        self.editor_tabs.add_tab(DockTab(editor))
+        '''if row is None:
             self.editor_tabs.setCurrentIndex(self.editor_tabs.addTab(editor, editor.filename))
         else:
             self.editor_tabs.setCurrentIndex(self.editor_tabs.insertTab(row, editor, editor.filename))
-        self.editor_tabs.setTabToolTip(self.editor_tabs.currentIndex(), editor.file)
+        self.editor_tabs.setTabToolTip(self.editor_tabs.currentIndex(), editor.file)'''
 
     def add_git_tab(self, path: str, row: int | None = None) -> None:
         """Add new git repository tab"""
@@ -1293,7 +1356,7 @@ class IdeWindow(QMainWindow):
             return
         editor: GitTab = GitTab(path, self.exit_code, self)
         if row is None:
-            self.editor_tabs.setCurrentIndex(self.editor_tabs.addTab(editor, path.split('/')[-1]))
+            self.editor_tabs.setCurrentIndex(self.editor_tabs.add_tab(editor, path.split('/')[-1]))
         else:
             self.editor_tabs.setCurrentIndex(self.editor_tabs.insertTab(row, editor, path.split('/')[-1]))
         self.editor_tabs.setTabToolTip(self.editor_tabs.currentIndex(), path)
@@ -1337,7 +1400,7 @@ class IdeWindow(QMainWindow):
         self.settings.setValue('Language', language)
 
         self.settings_window.setWindowTitle(texts.settings_btn[language])
-        self.editor_tabs.empty_widget.setText(texts.open_btn[language])
+        # self.editor_tabs.empty_widget.setText(texts.open_btn[language])
 
         self.file_menu.setTitle(texts.file_menu[language])
         self.new_btn.setText(texts.new_btn[language])
@@ -1585,7 +1648,7 @@ class IdeWindow(QMainWindow):
             save_last.setValue('V' + tab.file, self.editor_tabs.indexOf(tab))
         for tab in self.editor_tabs.findChildren(GitTab):
             save_last.setValue('G' + tab.path, self.editor_tabs.indexOf(tab))
-        save_last.setValue('current', self.editor_tabs.currentIndex())
+        # save_last.setValue('current', self.editor_tabs.currentIndex())
         self.options.setValue('Splitter', self.splitter.sizes())
         if self.isMaximized():
             self.options.setValue('Geometry', 'Maximized')
@@ -1875,7 +1938,8 @@ if __name__ == '__main__':
                 elif n[0] == 'G':
                     ide.add_git_tab(n[1:], int(last.value(n)))
             elif last.value('current') is not None:
-                ide.editor_tabs.setCurrentIndex(int(last.value('current')))
+                pass
+                # ide.editor_tabs.setCurrentIndex(int(last.value('current')))
         last.clear()
     for arg in sys.argv[1:]:
         if isfile(arg):
