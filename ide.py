@@ -22,7 +22,7 @@ import re
 import json
 import shutil
 from webbrowser import open as openweb
-from os import mkdir, system, remove, getpid, rename, startfile
+from os import mkdir, system, remove, getpid, rename, startfile, listdir
 from os.path import isfile, isdir, dirname, abspath, join, exists
 from requests import get
 import psutil
@@ -32,7 +32,6 @@ from PyQt6.QtCore import *
 from PyQt6.QtGui import *
 
 import texts
-from style import STYLE
 from default import USER, ENCODINGS
 
 try:
@@ -70,6 +69,12 @@ def update_filters() -> list[str]:
         filters_f.append(f'{i} Files (*.{" *.".join(j["file_formats"])})')
     return filters_f
 
+
+style: dict[str, str] = {}
+for file in listdir(resource_path('styles')):
+    if isfile(resource_path('styles/' + file)) and file.endswith('.qss'):
+        with open(resource_path('styles/' + file)) as qss:
+            style[file[:-4]] = qss.read()
 
 if exists(USER + '/.Vcode/languages.json'):
     with open(USER + '/.Vcode/languages.json') as llf:
@@ -972,12 +977,19 @@ class IdeWindow(QMainWindow):
         self.options: QSettings = QSettings('Vcode', 'Options')
 
         self.settings_window: SettingsDialog = SettingsDialog(self)
-        for st in STYLE.keys():
-            st_rb: QRadioButton = QRadioButton(st, self)
-            if st == self.settings.value('Style'):
+        if 'System' in style.keys():
+            st_rb: QRadioButton = QRadioButton('System', self)
+            if 'System' == self.settings.value('Style'):
                 st_rb.setChecked(True)
-            st_rb.clicked.connect(lambda: self.select_style(self.sender().text()))
+            st_rb.clicked.connect(lambda: self.select_style('System'))
             self.settings_window.style_select_layout.addWidget(st_rb)
+        for st in style.keys():
+            if st != 'System':
+                st_rb: QRadioButton = QRadioButton(st, self)
+                if st == self.settings.value('Style'):
+                    st_rb.setChecked(True)
+                st_rb.clicked.connect(lambda: self.select_style(self.sender().text()))
+                self.settings_window.style_select_layout.addWidget(st_rb)
 
         '''self.editor_tabs: TabWidget = TabWidget(self)
         self.editor_tabs.setTabsClosable(True)
@@ -1437,9 +1449,9 @@ class IdeWindow(QMainWindow):
 
     def select_style(self, style_name: str) -> None:
         """Set style to windows"""
-        if style_name in STYLE.keys():
+        if style_name in style.keys():
             self.settings.setValue('Style', style_name)
-            self.setStyleSheet(STYLE[style_name])
+            self.setStyleSheet(style[style_name])
 
     def select_font(self) -> None:
         """Change font for text edit area"""
