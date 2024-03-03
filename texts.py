@@ -35,6 +35,10 @@ find_start_btn = {'en': 'Find compiler', 'ru': 'Поиск компилятор�
 find_debug_btn = {'en': 'Find debugger', 'ru': 'Поиск отладчика', 'de': 'Debugger finden', 'ch': '查找调试器'}
 open_in_btn = {'en': 'Open in explorer', 'ru': 'Открыть в проводнике', 'de': 'Im Explorer öffnen',
                'ch': '在资源管理器中打开'}
+close_btn = {'en': 'Close', 'ru': 'Закрыть', 'de': 'Löschen', 'ch': '删除'}
+close_all_btn = {'en': 'Close all tabs', 'ru': 'Закрыть все вкладки', 'de': 'Alle Tabs schließen', 'ch': '关闭所有选项卡'}
+new_window_btn = {'en': 'Open in new window', 'ru': 'Открыть в новом окне', 'de': 'In einem neuen Fenster öffnen',
+                  'ch': '在新窗口中打开'}
 
 autorun = {'en': 'Autorun', 'ru': 'Автозагрузка', 'de': 'Automatisch laden', 'ch': '自动加载'}
 autosave = {'en': 'Autosave', 'ru': 'Автосохранение', 'de': 'Automatisches Speichern', 'ch': '自动保存'}

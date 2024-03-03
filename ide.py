@@ -253,12 +253,12 @@ class TextEditMenu(QMenu):
         self.addSeparator()
 
         self.start: QAction = QAction(self)
-        self.start.triggered.connect(ide.start_program)
+        self.start.triggered.connect(lambda: ide.start_program(file_ed=self.p))
         self.start.setShortcut('F5')
         self.addAction(self.start)
 
         self.debug: QAction = QAction(self)
-        self.debug.triggered.connect(ide.debug_program)
+        self.debug.triggered.connect(lambda: ide.debug_program(file_ed=self.p))
         self.debug.setShortcut('Shift+F5')
         self.addAction(self.debug)
 
@@ -296,7 +296,24 @@ class TextEditMenu(QMenu):
         self.popup(event.globalPos())
 
 
-class TextEditFullscreenMenu(TextEditMenu):
+class TextEditWindowMenu(TextEditMenu):
+    def __init__(self, parent: QTextEdit | QPlainTextEdit, *args, **kwargs) -> None:
+        super().__init__(parent=parent, *args, **kwargs)
+
+        self.addSeparator()
+
+        self.exit: QAction = QAction(self)
+        self.exit.triggered.connect(lambda: ide.close_window_mode(parent))
+        self.exit.setShortcut('Alt+F4')
+        self.addAction(self.exit)
+
+    def __call__(self, event: QContextMenuEvent) -> None:
+        lang: str = self.lang_s.value('Language')
+        self.exit.setText(texts.close_btn[lang])
+        super().__call__(event)
+
+
+class TextEditFullscreenMenu(TextEditWindowMenu):
     """TextEditMenu for presentation mode"""
 
     def __init__(self, parent: QTextEdit | QPlainTextEdit, *args, **kwargs) -> None:
@@ -314,20 +331,14 @@ class TextEditFullscreenMenu(TextEditMenu):
             act.setCheckable(True)
             if s == '200%':
                 act.setChecked(True)
-                self.coef_triggered(act)
             self.coef_group.addAction(act)
         self.coef.addActions(self.coef_group.actions())
-
-        self.exit: QAction = QAction(self)
-        self.exit.triggered.connect(self.p.close)
-        self.exit.setShortcut('Alt+F4')
-        self.addAction(self.exit)
 
     def __call__(self, event: QContextMenuEvent) -> None:
         lang: str = self.lang_s.value('Language')
         self.coef.setTitle(texts.font_sz_menu[lang])
-        self.exit.setText(texts.exit_presentation_btn[lang])
         super().__call__(event)
+        self.exit.setText(texts.exit_presentation_btn[lang])
 
     def coef_triggered(self, action: QAction) -> None:
         """Reset font size"""
@@ -408,13 +419,14 @@ class TreeViewMenu(QMenu):
 
     def paste_file(self) -> None:
         """Paste file from clipboard"""
-        path: str = app.clipboard().mimeData().urls()[0].url().replace('file:///', '')
         new_path: str = self.c.model.filePath(self.c.tree.selectedIndexes()[0])
         if isdir(new_path):
-            if isfile(path):
-                shutil.copy2(path, new_path + '/' + app.clipboard().mimeData().urls()[0].fileName())
-            elif isdir(path):
-                shutil.copytree(path, new_path + '/' + path.rsplit('/', maxsplit=1)[-1])
+            for url in app.clipboard().mimeData().urls():
+                path: str = url.url().replace('file:///', '')
+                if isfile(path):
+                    shutil.copy2(path, new_path + '/' + app.clipboard().mimeData().urls()[0].fileName())
+                elif isdir(path):
+                    shutil.copytree(path, new_path + '/' + path.rsplit('/', maxsplit=1)[-1])
 
     def delete_file(self) -> None:
         """Delete file"""
@@ -490,7 +502,6 @@ class LineEditMenu(QMenu):
         self.lang_s: QSettings = QSettings('Vcode', 'Settings')
 
     def __call__(self, event: QContextMenuEvent) -> None:
-        """Call this class to get contect menu"""
         lang: str = self.lang_s.value('language')
         self.undo.setText(texts.undo[lang])
         self.redo.setText(texts.redo[lang])
@@ -501,10 +512,115 @@ class LineEditMenu(QMenu):
         self.popup(event.globalPos())
 
 
+class TabBarMenu(QMenu):
+    def __init__(self, parent: QTabWidget, *args, **kwargs) -> None:
+        super().__init__(parent=parent, *args, **kwargs)
+        self.p: QTabWidget = parent
+        self.selected_pos: QPoint | None = None
+
+        self.close_current: QAction = QAction(self)
+        self.close_current.triggered.connect(self.close_cur_tab)
+        self.addAction(self.close_current)
+
+        self.close_all: QAction = QAction(self)
+        self.close_all.triggered.connect(self.close_all_tabs)
+        self.addAction(self.close_all)
+
+        self.addSeparator()
+
+        self.new_window: QAction = QAction(self)
+        self.new_window.triggered.connect(lambda: ide.new_window(self.p.tabBar().tabAt(self.selected_pos)))
+        self.addAction(self.new_window)
+
+        self.addSeparator()
+
+        self.open_in: QAction = QAction(self)
+        self.open_in.triggered.connect(self.open_in_explorer)
+        self.addAction(self.open_in)
+
+        self.addSeparator()
+
+        self.start: QAction = QAction(self)
+        self.start.triggered.connect(self.start_pr)
+        self.addAction(self.start)
+
+        self.debug: QAction = QAction(self)
+        self.debug.triggered.connect(self.debug_pr)
+        self.addAction(self.debug)
+
+        self.lang_s: QSettings = QSettings('Vcode', 'Settings')
+
+    def __call__(self, event: QMouseEvent) -> None:
+        if event.button() != Qt.MouseButton.RightButton or self.childAt(event.pos()) is not None or not self.p.count():
+            return
+        lang: str = self.lang_s.value('Language')
+        self.close_current.setText(texts.close_btn[lang])
+        self.close_all.setText(texts.close_all_btn[lang])
+        self.new_window.setText(texts.new_window_btn[lang])
+        self.open_in.setText(texts.open_in_btn[lang])
+        self.start.setText(texts.start_btn[lang])
+        self.debug.setText(texts.debug_btn[lang])
+        self.popup(event.globalPosition().toPoint())
+        self.selected_pos = event.pos()
+
+    def close_tab(self, index: int) -> None:
+        """Close tab"""
+        widget: EditorTab = self.p.widget(index)
+        if widget.saved_text != widget.toPlainText():
+            button_text: str = WarningMessageBox(self, 'Warning', texts.save_warning).wait()
+            if button_text in texts.cancel_btn.values():
+                return
+            elif button_text in texts.save_btn.values():
+                widget.save()
+        widget.deleteLater()
+
+    def close_cur_tab(self) -> None:
+        """Close selected or current tab"""
+        if (x := self.p.tabBar().tabAt(self.selected_pos)) != -1:
+            self.close_tab(x)
+            self.p.removeTab(x)
+        else:
+            self.close_tab(self.p.currentIndex())
+            self.p.removeTab(self.p.currentIndex())
+
+    def close_all_tabs(self) -> None:
+        """Close all tabs"""
+        for tab in range(self.p.count()):
+            self.close_tab(0)
+            self.p.removeTab(0)
+
+    def open_in_explorer(self) -> None:
+        """Open file or directory in explorer"""
+        if (x := self.p.tabBar().tabAt(self.selected_pos)) != -1 and type(self.p.widget(x)) is EditorTab:
+            pth: str = self.p.widget(x).path
+        elif type(self.p.currentWidget()) is EditorTab:
+            pth: str = self.p.currentWidget().path
+        else:
+            return
+        if sys.platform == 'win32':
+            system(f'start "" "{pth}"')
+        elif sys.platform.startswith('linux'):
+            system(f'xdg-open "{pth}"')
+
+    def start_pr(self) -> None:
+        """Start program in tab"""
+        if (x := self.p.tabBar().tabAt(self.selected_pos)) != -1:
+            ide.start_program(self.p.widget(x))
+        else:
+            ide.start_program(self.p.currentWidget())
+
+    def debug_pr(self) -> None:
+        """Debug program in tab"""
+        if (x := self.p.tabBar().tabAt(self.selected_pos)) != -1:
+            ide.debug_program(self.p.widget(x))
+        else:
+            ide.debug_program(self.p.currentWidget())
+
+
 class SystemMonitor(QDialog):
     """Show CPU percent and memory usage"""
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self.setWindowTitle('Vcode System monitor')
         self.setMinimumSize(300, 200)
@@ -538,7 +654,7 @@ class SystemMonitor(QDialog):
         self.timer.timeout.connect(self.monitor)
         self.timer.start()
 
-    def monitor(self):
+    def monitor(self) -> None:
         """Update values"""
         self.processor.setValue(int(psutil.cpu_percent()))
         self.ram.setValue(self.bytes_to_mb(psutil.virtual_memory().used))
@@ -557,7 +673,7 @@ class SystemMonitor(QDialog):
 class GitTab(QWidget):
     """Tab with git repository"""
 
-    def __init__(self, path: str, parent_exit_code_label: QLabel | None = None, parent=None):
+    def __init__(self, path: str, parent_exit_code_label: QLabel | None = None, parent=None) -> None:
         if parent_exit_code_label is not None:
             self.exit_code: QLabel = parent_exit_code_label
         else:
@@ -600,14 +716,14 @@ class GitTab(QWidget):
         self.repo_list.doubleClicked.connect(lambda x: self.p.add_tab(self.repo_list_model.filePath(x)))
         self.lay.addWidget(self.repo_list)
 
-    def change_branch(self, branch: str):
+    def change_branch(self, branch: str) -> None:
         self.git_repo.head.reference = branch
         self.git_repo.head.reset(working_tree=True)
 
-    def git_merge(self):
+    def git_merge(self) -> None:
         self.git_repo.merge_base()
 
-    def git_commit(self):
+    def git_commit(self) -> None:
         git_descr: InputDialog = InputDialog(texts.rename_btn[self.l_s.value('Language')],
                                              texts.rename_btn[self.l_s.value('Language')], self)
         git_descr.exec()
@@ -616,7 +732,7 @@ class GitTab(QWidget):
                 self.git_repo.index.add(self.repo_list_model.filePath(i))
             self.git_repo.index.commit(git_descr.text_value())
 
-    def git_push(self):
+    def git_push(self) -> None:
         self.git_repo.remotes.origin.push()
 
 
@@ -853,22 +969,6 @@ class LineNumberArea(QWidget):
         self.editor.update_line_event(event)
 
 
-class DockTab(QDockWidget):
-    def __init__(self, editor: EditorTab) -> None:
-        super().__init__()
-        self.editor: EditorTab = editor
-        self.setWidget(self.editor)
-        self.setWindowTitle(editor.filename)
-        self.topLevelChanged.connect(self.show_title)
-
-    def show_title(self):
-        print(self.editor.filename, self.isWindow(), self.isVisible(), self.hasFocus())
-        if True:
-            self.setTitleBarWidget(None)
-        else:
-            self.setTitleBarWidget(QLabel(self.editor.file))
-
-
 class TabWidget(QTabWidget):
     """Custom QTabWidget"""
 
@@ -879,6 +979,8 @@ class TabWidget(QTabWidget):
         self.lalay.addWidget(self.empty_widget, alignment=Qt.AlignmentFlag.AlignCenter)
         self.setLayout(self.lalay)
         self.currentChanged.connect(self.empty)
+
+        self.mouseReleaseEvent = TabBarMenu(self)
 
     def empty(self) -> None:
         """Show button when tab list is empty"""
@@ -891,7 +993,7 @@ class TabWidget(QTabWidget):
 class FindWindow(QDialog):
     """Find all text usages of string"""
 
-    def __init__(self, parent: EditorTab = None) -> None:
+    def __init__(self, parent: EditorTab | None = None) -> None:
         super().__init__(parent)
         self.parent: EditorTab = parent
         self.setModal(True)
@@ -949,21 +1051,6 @@ class HighlightMakerString(QWidget):
         layout.addWidget(self.remove_btn)
 
 
-class TabArea(QMainWindow):
-    def __init__(self, parent: QWidget) -> None:
-        super().__init__(parent)
-        self.setTabPosition(Qt.DockWidgetArea.AllDockWidgetAreas, QTabWidget.TabPosition.North)
-        self.setDockOptions(QMainWindow.DockOption.AnimatedDocks | QMainWindow.DockOption.AllowTabbedDocks |
-                            QMainWindow.DockOption.AllowNestedDocks)
-        self.current: DockTab | None = None
-
-    def add_tab(self, tab: DockTab) -> None:
-        self.addDockWidget(Qt.DockWidgetArea.BottomDockWidgetArea, tab)
-        if self.current is not None:
-            self.tabifyDockWidget(self.current, tab)
-        self.current = tab
-
-
 class IdeWindow(QMainWindow):
     """Main app window"""
 
@@ -991,20 +1078,12 @@ class IdeWindow(QMainWindow):
                 st_rb.clicked.connect(lambda: self.select_style(self.sender().text()))
                 self.settings_window.style_select_layout.addWidget(st_rb)
 
-        '''self.editor_tabs: TabWidget = TabWidget(self)
+        self.editor_tabs: TabWidget = TabWidget(self)
         self.editor_tabs.setTabsClosable(True)
         self.editor_tabs.setMovable(True)
         self.editor_tabs.tabCloseRequested.connect(self.close_tab)
         self.editor_tabs.currentChanged.connect(self.sel_tab)
-        self.editor_tabs.empty_widget.clicked.connect(self.open_file)'''
-        '''tb = QTabBar(self)
-        tb.currentChanged.connect(lambda: print(tb.currentIndex(), tb.geometry()))
-        etpb = QVBoxLayout(self)'''
-        self.editor_tabs = TabArea(self)
-        '''etpb.addWidget(tb)
-        etpb.addWidget(self.editor_tabs)
-        w = QWidget(self)
-        w.setLayout(etpb)'''
+        self.editor_tabs.empty_widget.clicked.connect(self.open_file)
 
         self.model: QFileSystemModel = QFileSystemModel(self)
         self.model.setRootPath('')
@@ -1046,28 +1125,6 @@ class IdeWindow(QMainWindow):
         empty.setObjectName('empty')
         empty.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.tool_bar.addWidget(empty)
-
-        """# pr1 = subprocess.Popen('cmd', creationflags=subprocess.CREATE_NEW_CONSOLE, process_group=subprocess.CREATE_NEW_PROCESS_GROUP)
-        if sys.platform == 'win32':
-            from PyQt6.sip import voidptr
-            import win32gui, win32process
-            w = []
-
-            def enum_window_callback(hwnd, pid):
-                tid, current_pid = win32process.GetWindowThreadProcessId(hwnd)
-                if pid == current_pid and win32gui.IsWindowVisible(hwnd):
-                    w.append(hwnd)
-
-            win32gui.EnumWindows(enum_window_callback, [i for i in psutil.process_iter() if i.name() == 'WindowsTerminal.exe'][0].pid)
-            aa = QWindow.fromWinId(voidptr(w[0]))
-            print(aa.geometry())
-            '''aa.hide()
-            x = QWidget.createWindowContainer(aa)
-            x.showMaximized()
-            print(x.geometry())
-            print(x)'''
-        elif sys.platform.startswith('linux'):
-            system('xdotool search --any --pid 1234')"""
 
         self.position_code: QLabel = QLabel('0:0')
         self.position_code.setObjectName('exit_code')
@@ -1299,7 +1356,7 @@ class IdeWindow(QMainWindow):
     def sel_tab(self) -> None:
         """Change current tab"""
         if self.editor_tabs.count():
-            self.setWindowTitle(self.editor_tabs.tabText(self.editor_tabs.currentIndex()) + ' - Vcode')
+            self.setWindowTitle(self.editor_tabs.currentWidget().windowTitle() + ' - Vcode')
             if type(self.editor_tabs.currentWidget()) == EditorTab:
                 d: list[str] = self.editor_tabs.currentWidget().file.split('/')
                 for _ in range(len(d)):
@@ -1354,13 +1411,12 @@ class IdeWindow(QMainWindow):
                 editor.start_command = language['start_command']
                 editor.debug_command = language['debug_command']
                 editor.language = langname
-
-        self.editor_tabs.add_tab(DockTab(editor))
-        '''if row is None:
+        editor.setWindowTitle(editor.filename)
+        if row is None:
             self.editor_tabs.setCurrentIndex(self.editor_tabs.addTab(editor, editor.filename))
         else:
             self.editor_tabs.setCurrentIndex(self.editor_tabs.insertTab(row, editor, editor.filename))
-        self.editor_tabs.setTabToolTip(self.editor_tabs.currentIndex(), editor.file)'''
+        self.editor_tabs.setTabToolTip(self.editor_tabs.currentIndex(), editor.file)
 
     def add_git_tab(self, path: str, row: int | None = None) -> None:
         """Add new git repository tab"""
@@ -1383,36 +1439,55 @@ class IdeWindow(QMainWindow):
                     return
                 elif button_text in texts.save_btn.values():
                     widget.save()
-        self.editor_tabs.removeTab(tab)
         widget.deleteLater()
+        self.editor_tabs.removeTab(tab)
+
+    def new_window(self, tab: int) -> None:
+        """Show current tab in new window"""
+        t: EditorTab | GitTab | QWidget = self.editor_tabs.widget(tab)
+        if type(t) is not EditorTab:
+            return
+        self.editor_tabs.removeTab(tab)
+        t.contextMenuEvent = TextEditWindowMenu(t)
+        t.closeEvent = lambda e, x=t: self.close_window(e, x)
+        t.setParent(None, Qt.WindowType.Window)
+        t.show()
 
     def presentation_mode(self) -> None:
         """Show current tab fullscreen"""
-        tab: EditorTab | GitTab | None = self.editor_tabs.currentWidget()
-        if type(tab) is EditorTab:
-            editor: EditorTab = EditorTab(tab.file, self)
-            editor.setWindowFlag(Qt.WindowType.Window)
-            editor.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
-            editor.contextMenuEvent = TextEditFullscreenMenu(editor)
-            c: QTextCursor = editor.textCursor()
-            c.movePosition(QTextCursor.MoveOperation.End)
-            editor.setTextCursor(c)
-            editor.setFocus()
-            editor.cursorPositionChanged.connect(editor.highlight_current_line)
-            editor.textChanged.connect(lambda: tab.setPlainText(editor.toPlainText()))
-            if tab.highlighter is not None:
-                editor.set_highlighter(Highlighter(tab.highlighter.path))
-            editor.setWindowTitle(tab.filename)
-            editor.showFullScreen()
-            self.hide()
-            editor.closeEvent = lambda e: self.show_ide()
+        t: EditorTab | GitTab | QWidget = self.editor_tabs.currentWidget()
+        if type(t) is not EditorTab:
+            return
+        self.editor_tabs.removeTab(self.editor_tabs.currentIndex())
+        t.contextMenuEvent = TextEditFullscreenMenu(t)
+        t.closeEvent = lambda e, x=t: self.close_window(e, x)
+        t.setParent(None, Qt.WindowType.Window)
+        font: QFont = t.font()
+        font.setPointSize(font.pointSize() * 2)
+        t.setFont(font)
+        t.showFullScreen()
+
+    def close_window(self, e: QCloseEvent, widget: EditorTab):
+        """Close windowed tab"""
+        e.ignore()
+        self.close_window_mode(widget)
+
+    def close_window_mode(self, t: EditorTab) -> None:
+        """Return windowed tab to tab widget"""
+        t.showNormal()
+        t.setFont(self.settings.value('Font'))
+        t.contextMenuEvent = TextEditMenu(t)
+        t.closeEvent = EditorTab.closeEvent
+        t.setWindowFlag(Qt.WindowType.Widget)
+        self.editor_tabs.setCurrentIndex(self.editor_tabs.addTab(t, t.filename))
+        self.editor_tabs.setTabToolTip(self.editor_tabs.currentIndex(), t.path)
 
     def select_language(self, language: str) -> None:
-        """Translate program labels"""
+        """Translate program interface"""
         self.settings.setValue('Language', language)
 
         self.settings_window.setWindowTitle(texts.settings_btn[language])
-        # self.editor_tabs.empty_widget.setText(texts.open_btn[language])
+        self.editor_tabs.empty_widget.setText(texts.open_btn[language])
 
         self.file_menu.setTitle(texts.file_menu[language])
         self.new_btn.setText(texts.new_btn[language])
@@ -1451,7 +1526,7 @@ class IdeWindow(QMainWindow):
         """Set style to windows"""
         if style_name in style.keys():
             self.settings.setValue('Style', style_name)
-            self.setStyleSheet(style[style_name])
+            app.setStyleSheet(style[style_name])
 
     def select_font(self) -> None:
         """Change font for text edit area"""
@@ -1474,33 +1549,36 @@ class IdeWindow(QMainWindow):
         else:
             self.exit_code.setText('Can`t start terminal in this operating system')
 
-    def start_program(self) -> None:
-        """Run code from current tab"""
-        if self.editor_tabs.count():
-            if not self.settings.value('Autosave') and \
-                    self.editor_tabs.currentWidget().saved_text != self.editor_tabs.currentWidget().toPlainText():
-                button_text: str = WarningMessageBox(self, 'Warning', texts.save_warning).wait()
-                if button_text in texts.cancel_btn.values():
-                    return
-                elif button_text in texts.save_btn.values():
-                    self.editor_tabs.currentWidget().save()
-            threading.Thread(target=self.program).start()
+    def start_program(self, file_ed: EditorTab = None) -> None:
+        """Run code"""
+        if file_ed is None:
+            file_ed = self.editor_tabs.currentWidget()
+            if file_ed is None:
+                return
+        if not self.settings.value('Autosave') and file_ed.saved_text != file_ed.toPlainText():
+            button_text: str = WarningMessageBox(self, 'Warning', texts.save_warning).wait()
+            if button_text in texts.cancel_btn.values():
+                return
+            elif button_text in texts.save_btn.values():
+                file_ed.save()
+        threading.Thread(target=self.program, args=[file_ed]).start()
 
-    def debug_program(self):
-        """Debug code from current tab"""
-        if self.editor_tabs.count():
-            if not self.settings.value('Autosave') and \
-                    self.editor_tabs.currentWidget().saved_text != self.editor_tabs.currentWidget().toPlainText():
-                button_text: str = WarningMessageBox(self, 'Warning', texts.save_warning).wait()
-                if button_text in texts.cancel_btn.values():
-                    return
-                elif button_text in texts.save_btn.values():
-                    self.editor_tabs.currentWidget().save()
-            threading.Thread(target=self.program, args=[True]).start()
+    def debug_program(self, file_ed: EditorTab = None) -> None:
+        """Debug code"""
+        if file_ed is None:
+            file_ed = self.editor_tabs.currentWidget()
+            if file_ed is None:
+                return
+        if not self.settings.value('Autosave') and file_ed.saved_text != file_ed.toPlainText():
+            button_text: str = WarningMessageBox(self, 'Warning', texts.save_warning).wait()
+            if button_text in texts.cancel_btn.values():
+                return
+            elif button_text in texts.save_btn.values():
+                file_ed.save()
+        threading.Thread(target=self.program, args=[file_ed, True]).start()
 
-    def program(self, debug: bool = False) -> None:
+    def program(self, code: EditorTab, debug: bool = False) -> None:
         """Code working process"""
-        code: EditorTab = self.editor_tabs.currentWidget()
         pth: str = code.path
         fnm: str = code.filename
         if code.language in language_list.keys():
@@ -1643,24 +1721,27 @@ class IdeWindow(QMainWindow):
 
     def closeEvent(self, a0: QCloseEvent) -> None:
         """Save all settings when close"""
-        for tab in self.editor_tabs.findChildren(EditorTab):
-            if tab.saved_text != tab.toPlainText():
+        for wgt in app.allWidgets():
+            if type(wgt) is EditorTab and wgt.saved_text != wgt.toPlainText():
                 button_text: str = WarningMessageBox(self, 'Warning', texts.save_warning).wait()
                 if button_text in texts.cancel_btn.values():
                     a0.ignore()
+                    return
                 elif button_text in texts.save_btn.values():
-                    for stab in self.editor_tabs.findChildren(EditorTab):
+                    for stab in app.findChildren(EditorTab):
                         stab.save()
                     a0.accept()
                 else:
                     a0.accept()
                 break
         save_last: QSettings = QSettings('Vcode', 'Last')
-        for tab in self.editor_tabs.findChildren(EditorTab):
+        for tab in filter(lambda w: type(w) is EditorTab, app.allWidgets()):
+            if self.editor_tabs.indexOf(tab) == -1:
+                tab.close()
             save_last.setValue('V' + tab.file, self.editor_tabs.indexOf(tab))
         for tab in self.editor_tabs.findChildren(GitTab):
             save_last.setValue('G' + tab.path, self.editor_tabs.indexOf(tab))
-        # save_last.setValue('current', self.editor_tabs.currentIndex())
+        save_last.setValue('current', self.editor_tabs.currentIndex())
         self.options.setValue('Splitter', self.splitter.sizes())
         if self.isMaximized():
             self.options.setValue('Geometry', 'Maximized')
@@ -1796,9 +1877,11 @@ class AboutDialog(QDialog):
         self.name.setFont(QFont('Arial', 18))
         layout.addWidget(self.name, alignment=Qt.AlignmentFlag.AlignHCenter)
 
-        self.text: QLabel = QLabel(f'Version: {VERSION}\n\nVladimir Varenik\n'
-                                   f'Copyright 2023-2024. All rights reserved\n'
+        self.text: QLabel = QLabel(f'Version: {VERSION}<br><br><a href="https://vcodeide.ru">vcodeide.ru</a>'
+                                   f'<br><br>Vladimir Varenik<br>'
+                                   f'Copyright 2023-2024. All rights reserved<br>'
                                    f'This program is under GNU General Public License', self)
+        self.text.setOpenExternalLinks(True)
         layout.addWidget(self.text)
 
         self.license: QPushButton = QPushButton('Read license', self)
@@ -1950,8 +2033,7 @@ if __name__ == '__main__':
                 elif n[0] == 'G':
                     ide.add_git_tab(n[1:], int(last.value(n)))
             elif last.value('current') is not None:
-                pass
-                # ide.editor_tabs.setCurrentIndex(int(last.value('current')))
+                ide.editor_tabs.setCurrentIndex(int(last.value('current')))
         last.clear()
     for arg in sys.argv[1:]:
         if isfile(arg):
