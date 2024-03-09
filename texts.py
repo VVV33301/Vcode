@@ -3,6 +3,8 @@ new_btn = {'en': 'New', 'ru': 'Создать', 'de': 'Erstellen', 'ch': '创造
 open_btn = {'en': 'Open', 'ru': 'Открыть', 'de': 'Offen', 'ch': '打开'}
 save_btn = {'en': 'Save', 'ru': 'Сохранить', 'de': 'Speichern', 'ch': '节省'}
 save_as_btn = {'en': 'Save as', 'ru': 'Сохранить как', 'de': 'Speichern als', 'ch': '另存为'}
+history_btn = {'en': 'History', 'ru': 'История', 'de': 'Suchverlauf', 'ch': '搜索历史记录'}
+delete_history_btn = {'en': 'Delete history', 'ru': 'Очистить историю', 'de': 'Suchverlauf löschen', 'ch': '清除搜索历史'}
 exit_btn = {'en': 'Exit', 'ru': 'Выход', 'de': 'Ausfahrt', 'ch': '出口'}
 settings_btn = {'en': 'Settings', 'ru': 'Настройки', 'de': 'Einstellungen', 'ch': '设置'}
 start_btn = {'en': 'Start', 'ru': 'Запустить', 'de': 'Start', 'ch': '开始'}
@@ -17,7 +19,9 @@ add_btn = {'en': 'Add', 'ru': 'Добавить', 'de': 'Hinzufügen', 'ch': '�
 edit_highlight_btn = {'en': 'Edit highlight', 'ru': 'Редактировать выделение', 'de': 'Hervorhebung bearbeiten',
                       'ch': '编辑突出显示'}
 remove_btn = {'en': 'Remove', 'ru': 'Удалить', 'de': 'Löschen', 'ch': '删除'}
+check_btn = {'en': 'Check updates', 'ru': 'Проверить обновления', 'de': 'Auf Aktualisierung prüfen', 'ch': '检查更新'}
 download_btn = {'en': 'Update Vcode', 'ru': 'Обновить Vcode', 'de': 'Vcode aktualisieren', 'ch': '更新Vcode'}
+update_btn = {'en': 'Update', 'ru': 'Обновить', 'de': 'Aktualisieren', 'ch': '更新'}
 edit_btn = {'en': 'Edit', 'ru': 'Правка', 'de': 'Bearbeiten', 'ch': '编辑'}
 view_btn = {'en': 'View', 'ru': 'Вид', 'de': 'Sicht', 'ch': '看法'}
 monitor_btn = {'en': 'System monitor', 'ru': 'Системный монитор', 'de': 'Systemmonitor', 'ch': '系统监控'}
@@ -66,3 +70,5 @@ update_warning = {'en': 'New version of Vcode is available. Do you want to updat
                   'ru': 'Доступна новая версия Vcode. Вы хотите обновить?',
                   'de': 'Neue Version von Vcode ist verfügbar. Möchten Sie aktualisieren?',
                   'ch': '新版本的 Vcode 已可用. 你想更新吗?'}
+update_not = {'en': 'You have the latest version of Vcode installed', 'ru': 'У вас установлена последняя версия Vcode',
+              'de': 'Sie haben die neueste Version von Vcode installiert', 'ch': '您拥有最新版本的 Vcode'}

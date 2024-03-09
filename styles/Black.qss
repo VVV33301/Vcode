@@ -39,6 +39,10 @@ QListView {
     height: 6em;
 }
 
+QHeaderView {
+    color: black;
+}
+
 QTreeView::item:hover, QListView::item:hover {
     background-color: rgb(7, 7, 8);
 }

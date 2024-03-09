@@ -183,18 +183,30 @@ class InputDialog(QDialog):
 
 class WarningMessageBox(QMessageBox):
     """Custom QMessageBox"""
+    INFO: int = 0
+    SAVE: int = 1
+    UPDATE: int = 2
 
-    def __init__(self, parent: QWidget, title: str, text_all_lang: dict[str, str]) -> None:
+    def __init__(self, parent: QWidget, title: str, text_all_lang: dict[str, str],
+                 msg_type: int = INFO) -> None:
         super().__init__(parent=parent)
         lang: str = QSettings('Vcode', 'Settings').value('Language')
         self.setWindowTitle(title)
         self.setText(text_all_lang[lang])
-        self.setStandardButtons(self.StandardButton.Save | self.StandardButton.Discard | self.StandardButton.Cancel)
-        self.setDefaultButton(self.StandardButton.Save)
 
-        self.button(self.StandardButton.Save).setText(texts.save_btn[lang])
-        self.button(self.StandardButton.Discard).setText(texts.discard_btn[lang])
-        self.button(self.StandardButton.Cancel).setText(texts.cancel_btn[lang])
+        if msg_type == self.SAVE:
+            self.setStandardButtons(self.StandardButton.Save | self.StandardButton.Discard | self.StandardButton.Cancel)
+            self.setDefaultButton(self.StandardButton.Save)
+            self.button(self.StandardButton.Save).setText(texts.save_btn[lang])
+            self.button(self.StandardButton.Discard).setText(texts.discard_btn[lang])
+            self.button(self.StandardButton.Cancel).setText(texts.cancel_btn[lang])
+        elif msg_type == self.UPDATE:
+            self.setStandardButtons(self.StandardButton.Yes | self.StandardButton.No)
+            self.setDefaultButton(self.StandardButton.Yes)
+            self.button(self.StandardButton.Yes).setText(texts.update_btn[lang])
+            self.button(self.StandardButton.No).setText(texts.cancel_btn[lang])
+        else:
+            self.setStandardButtons(self.StandardButton.Ok)
 
         self.setWindowModality(Qt.WindowModality.ApplicationModal)
 
@@ -297,6 +309,8 @@ class TextEditMenu(QMenu):
 
 
 class TextEditWindowMenu(TextEditMenu):
+    """TextEditMenu for windows"""
+
     def __init__(self, parent: QTextEdit | QPlainTextEdit, *args, **kwargs) -> None:
         super().__init__(parent=parent, *args, **kwargs)
 
@@ -513,6 +527,8 @@ class LineEditMenu(QMenu):
 
 
 class TabBarMenu(QMenu):
+    """Menu for tab bar"""
+
     def __init__(self, parent: QTabWidget, *args, **kwargs) -> None:
         super().__init__(parent=parent, *args, **kwargs)
         self.p: QTabWidget = parent
@@ -567,7 +583,7 @@ class TabBarMenu(QMenu):
         """Close tab"""
         widget: EditorTab = self.p.widget(index)
         if widget.saved_text != widget.toPlainText():
-            button_text: str = WarningMessageBox(self, 'Warning', texts.save_warning).wait()
+            button_text: str = WarningMessageBox(self, 'Warning', texts.save_warning, WarningMessageBox.SAVE).wait()
             if button_text in texts.cancel_btn.values():
                 return
             elif button_text in texts.save_btn.values():
@@ -591,9 +607,9 @@ class TabBarMenu(QMenu):
 
     def open_in_explorer(self) -> None:
         """Open file or directory in explorer"""
-        if (x := self.p.tabBar().tabAt(self.selected_pos)) != -1 and type(self.p.widget(x)) is EditorTab:
+        if (x := self.p.tabBar().tabAt(self.selected_pos)) != -1 and type(self.p.widget(x)):
             pth: str = self.p.widget(x).path
-        elif type(self.p.currentWidget()) is EditorTab:
+        elif type(self.p.currentWidget()) in (EditorTab, GitTab):
             pth: str = self.p.currentWidget().path
         else:
             return
@@ -689,7 +705,6 @@ class GitTab(QWidget):
         self.git_repo: git.Repo = git.Repo(path)
 
         self.lay: QGridLayout = QGridLayout(self)
-        self.lay: QGridLayout = QGridLayout(self)
         self.bar: QToolBar = QToolBar(self)
         self.lay.addWidget(self.bar)
 
@@ -701,6 +716,10 @@ class GitTab(QWidget):
         self.push.triggered.connect(self.git_push)
         self.bar.addAction(self.push)
 
+        self.merge: QAction = QAction('Merge', self)
+        self.merge.triggered.connect(self.git_merge)
+        self.bar.addAction(self.merge)
+
         self.branch: QComboBox = QComboBox(self)
         self.branch.addItems([i.name for i in self.git_repo.branches])
         self.branch.setCurrentText(self.git_repo.active_branch.name)
@@ -708,7 +727,6 @@ class GitTab(QWidget):
         self.lay.addWidget(self.branch)
 
         self.repo_list: QTreeView = QTreeView(self)
-        self.repo_list.contextMenuEvent = TreeViewMenu(self.repo_list, self)
         self.repo_list_model: QFileSystemModel = QFileSystemModel(self)
         self.repo_list_model.setRootPath(path)
         self.repo_list.setModel(self.repo_list_model)
@@ -717,13 +735,16 @@ class GitTab(QWidget):
         self.lay.addWidget(self.repo_list)
 
     def change_branch(self, branch: str) -> None:
+        """Change current branch"""
         self.git_repo.head.reference = branch
         self.git_repo.head.reset(working_tree=True)
 
     def git_merge(self) -> None:
+        """Merge from other commits"""
         self.git_repo.merge_base()
 
     def git_commit(self) -> None:
+        """Create new commit"""
         git_descr: InputDialog = InputDialog(texts.rename_btn[self.l_s.value('Language')],
                                              texts.rename_btn[self.l_s.value('Language')], self)
         git_descr.exec()
@@ -733,6 +754,7 @@ class GitTab(QWidget):
             self.git_repo.index.commit(git_descr.text_value())
 
     def git_push(self) -> None:
+        """Push commits"""
         self.git_repo.remotes.origin.push()
 
 
@@ -1062,6 +1084,7 @@ class IdeWindow(QMainWindow):
 
         self.settings: QSettings = QSettings('Vcode', 'Settings')
         self.options: QSettings = QSettings('Vcode', 'Options')
+        self.history: QSettings = QSettings('Vcode', 'History')
 
         self.settings_window: SettingsDialog = SettingsDialog(self)
         if 'System' in style.keys():
@@ -1146,6 +1169,16 @@ class IdeWindow(QMainWindow):
         self.open_btn.setShortcut(QKeySequence.StandardKey.Open)
         self.open_btn.triggered.connect(self.open_file)
         self.file_menu.addAction(self.open_btn)
+
+        self.file_menu.addSeparator()
+
+        self.history_btn: QMenu = QMenu(self)
+        self.history_btn.setToolTipsVisible(True)
+        self.file_menu.addMenu(self.history_btn)
+
+        self.delete_history_btn: QAction = QAction(self)
+        self.delete_history_btn.triggered.connect(self.delete_history)
+        self.update_history_menu()
 
         self.file_menu.addSeparator()
 
@@ -1256,6 +1289,12 @@ class IdeWindow(QMainWindow):
         self.feedback_btn.triggered.connect(lambda: openweb('https://vcodeide.ru/feedback/'))
         self.about_menu.addAction(self.feedback_btn)
 
+        self.about_menu.addSeparator()
+
+        self.check_updates_btn: QAction = QAction(self)
+        self.check_updates_btn.triggered.connect(self.check_updates)
+        self.about_menu.addAction(self.check_updates_btn)
+
         self.download_btn: QAction = QAction(self)
         self.download_btn.triggered.connect(lambda: openweb('https://vcodeide.ru/download/'))
 
@@ -1321,7 +1360,7 @@ class IdeWindow(QMainWindow):
         self.settings_window.font_size.valueChanged.connect(self.select_font)
 
         self.show_ide()
-        self.check_updates()
+        self.check_updates(show_else=False)
 
         self.position_code.setText('')
         self.selection_code.setText('')
@@ -1337,16 +1376,32 @@ class IdeWindow(QMainWindow):
             self.setGeometry(self.options.value('Geometry'))
             self.show()
 
-    def check_updates(self) -> None:
+    def check_updates(self, *, show_else: bool = True) -> None:
         """Checking for updates"""
 
-        def check():
+        def check() -> None:
             try:
-                if VERSION != get('https://version.vcodeide.ru/', verify=False).text:
+                if list(map(int, VERSION.split('.'))) < list(
+                        map(int, get('https://version.vcodeide.ru/', verify=False).text.split('.'))):
                     self.menuBar().addAction(self.download_btn)
+                    act_true.trigger()
+                elif show_else:
+                    act_false.trigger()
             except OSError:
                 pass
 
+        def show_update_message() -> None:
+            msg: str = WarningMessageBox(self, 'Vcode Updater', texts.update_warning, WarningMessageBox.UPDATE).wait()
+            if msg == texts.update_btn[self.settings.value('Language')]:
+                self.download_btn.trigger()
+
+        def show_else_message() -> None:
+            WarningMessageBox(self, 'Vcode Updater', texts.update_not).wait()
+
+        act_true: QAction = QAction()
+        act_true.triggered.connect(show_update_message)
+        act_false: QAction = QAction()
+        act_false.triggered.connect(show_else_message)
         threading.Thread(target=check).start()
 
     def show_monitor(self) -> None:
@@ -1364,12 +1419,15 @@ class IdeWindow(QMainWindow):
                     del d[-1]
                 self.tree.selectionModel().select(self.model.index(self.editor_tabs.currentWidget().file),
                                                   QItemSelectionModel.SelectionFlag.Select)
+                self.position_code.setText('0:0')
+                self.selection_code.setText('')
+                self.edit_menu.setEnabled(True)
             else:
                 self.tree.selectionModel().select(self.model.index(self.editor_tabs.currentWidget().path),
                                                   QItemSelectionModel.SelectionFlag.Select)
-            self.position_code.setText('0:0')
-            self.selection_code.setText('')
-            self.edit_menu.setEnabled(True)
+                self.position_code.setText('')
+                self.selection_code.setText('')
+                self.edit_menu.setEnabled(False)
         else:
             self.setWindowTitle('Vcode')
             self.position_code.setText('')
@@ -1412,6 +1470,12 @@ class IdeWindow(QMainWindow):
                 editor.debug_command = language['debug_command']
                 editor.language = langname
         editor.setWindowTitle(editor.filename)
+        for item in self.history.allKeys():
+            if self.history.value(item) == filename:
+                self.history.remove(item)
+        self.history.setValue(str(len(self.history.allKeys())), filename)
+        self.update_history()
+        self.update_history_menu()
         if row is None:
             self.editor_tabs.setCurrentIndex(self.editor_tabs.addTab(editor, editor.filename))
         else:
@@ -1423,8 +1487,9 @@ class IdeWindow(QMainWindow):
         if not isdir(path):
             return
         editor: GitTab = GitTab(path, self.exit_code, self)
+        editor.setWindowTitle('Git: ' + editor.path.rsplit('/', maxsplit=1)[-1])
         if row is None:
-            self.editor_tabs.setCurrentIndex(self.editor_tabs.add_tab(editor, path.split('/')[-1]))
+            self.editor_tabs.setCurrentIndex(self.editor_tabs.addTab(editor, path.split('/')[-1]))
         else:
             self.editor_tabs.setCurrentIndex(self.editor_tabs.insertTab(row, editor, path.split('/')[-1]))
         self.editor_tabs.setTabToolTip(self.editor_tabs.currentIndex(), path)
@@ -1434,7 +1499,7 @@ class IdeWindow(QMainWindow):
         widget: EditorTab | GitTab = self.editor_tabs.widget(tab)
         if type(widget) is EditorTab:
             if widget.saved_text != widget.toPlainText():
-                button_text: str = WarningMessageBox(self, 'Warning', texts.save_warning).wait()
+                button_text: str = WarningMessageBox(self, 'Warning', texts.save_warning, WarningMessageBox.SAVE).wait()
                 if button_text in texts.cancel_btn.values():
                     return
                 elif button_text in texts.save_btn.values():
@@ -1445,13 +1510,17 @@ class IdeWindow(QMainWindow):
     def new_window(self, tab: int) -> None:
         """Show current tab in new window"""
         t: EditorTab | GitTab | QWidget = self.editor_tabs.widget(tab)
-        if type(t) is not EditorTab:
-            return
-        self.editor_tabs.removeTab(tab)
-        t.contextMenuEvent = TextEditWindowMenu(t)
-        t.closeEvent = lambda e, x=t: self.close_window(e, x)
-        t.setParent(None, Qt.WindowType.Window)
-        t.show()
+        if type(t) is EditorTab:
+            self.editor_tabs.removeTab(tab)
+            t.contextMenuEvent = TextEditWindowMenu(t)
+            t.closeEvent = lambda e, x=t: self.close_window(e, x)
+            t.setParent(None, Qt.WindowType.Window)
+            t.show()
+        elif type(t) is GitTab:
+            self.editor_tabs.removeTab(tab)
+            t.closeEvent = lambda e, x=t: self.close_window(e, x)
+            t.setParent(None, Qt.WindowType.Window)
+            t.show()
 
     def presentation_mode(self) -> None:
         """Show current tab fullscreen"""
@@ -1467,20 +1536,46 @@ class IdeWindow(QMainWindow):
         t.setFont(font)
         t.showFullScreen()
 
-    def close_window(self, e: QCloseEvent, widget: EditorTab):
+    def close_window(self, e: QCloseEvent, widget: EditorTab) -> None:
         """Close windowed tab"""
         e.ignore()
         self.close_window_mode(widget)
 
-    def close_window_mode(self, t: EditorTab) -> None:
+    def close_window_mode(self, t: EditorTab | GitTab) -> None:
         """Return windowed tab to tab widget"""
         t.showNormal()
-        t.setFont(self.settings.value('Font'))
-        t.contextMenuEvent = TextEditMenu(t)
         t.closeEvent = EditorTab.closeEvent
         t.setWindowFlag(Qt.WindowType.Widget)
-        self.editor_tabs.setCurrentIndex(self.editor_tabs.addTab(t, t.filename))
+        if type(t) is EditorTab:
+            t.setFont(self.settings.value('Font'))
+            t.contextMenuEvent = TextEditMenu(t)
+            self.editor_tabs.setCurrentIndex(self.editor_tabs.addTab(t, t.filename))
+        else:
+            self.editor_tabs.setCurrentIndex(self.editor_tabs.addTab(t, t.path.rsplit('/', maxsplit=1)[-1]))
         self.editor_tabs.setTabToolTip(self.editor_tabs.currentIndex(), t.path)
+
+    def update_history(self) -> None:
+        """Update history"""
+        lst: list = [self.history.value(i) for i in self.history.allKeys()][-10:]
+        self.history.clear()
+        for i in range(len(lst)):
+            self.history.setValue(str(i), lst[i])
+
+    def update_history_menu(self) -> None:
+        """Update history menu"""
+        self.history_btn.clear()
+        for item in self.history.allKeys():
+            act: QAction = QAction(self.history.value(item).rsplit('/', maxsplit=1)[-1], self)
+            act.setToolTip(self.history.value(item))
+            act.triggered.connect(lambda: self.add_tab(self.sender().toolTip()))
+            self.history_btn.addAction(act)
+        self.history_btn.addSeparator()
+        self.history_btn.addAction(self.delete_history_btn)
+
+    def delete_history(self) -> None:
+        """Delete history"""
+        self.history.clear()
+        self.update_history_menu()
 
     def select_language(self, language: str) -> None:
         """Translate program interface"""
@@ -1494,6 +1589,8 @@ class IdeWindow(QMainWindow):
         self.open_btn.setText(texts.open_btn[language])
         self.save_btn.setText(texts.save_btn[language])
         self.save_as_btn.setText(texts.save_as_btn[language])
+        self.history_btn.setTitle(texts.history_btn[language])
+        self.delete_history_btn.setText(texts.delete_history_btn[language])
         self.exit_btn.setText(texts.exit_btn[language])
         self.settings_btn.setText(texts.settings_btn[language])
         self.start_btn.setText(texts.start_btn[language])
@@ -1502,6 +1599,7 @@ class IdeWindow(QMainWindow):
         self.about_menu.setTitle(texts.about_menu[language])
         self.about_btn.setText(texts.about_btn[language])
         self.feedback_btn.setText(texts.feedback_btn[language])
+        self.check_updates_btn.setText(texts.check_btn[language])
         self.download_btn.setText(texts.download_btn[language])
         self.view_menu.setTitle(texts.view_btn[language])
         self.monitor_btn.setText(texts.monitor_btn[language])
@@ -1551,12 +1649,12 @@ class IdeWindow(QMainWindow):
 
     def start_program(self, file_ed: EditorTab = None) -> None:
         """Run code"""
-        if file_ed is None:
+        if file_ed is None or type(file_ed) is not EditorTab:
             file_ed = self.editor_tabs.currentWidget()
-            if file_ed is None:
+            if file_ed is None or type(file_ed) is not EditorTab:
                 return
         if not self.settings.value('Autosave') and file_ed.saved_text != file_ed.toPlainText():
-            button_text: str = WarningMessageBox(self, 'Warning', texts.save_warning).wait()
+            button_text: str = WarningMessageBox(self, 'Warning', texts.save_warning, WarningMessageBox.SAVE).wait()
             if button_text in texts.cancel_btn.values():
                 return
             elif button_text in texts.save_btn.values():
@@ -1565,12 +1663,12 @@ class IdeWindow(QMainWindow):
 
     def debug_program(self, file_ed: EditorTab = None) -> None:
         """Debug code"""
-        if file_ed is None:
+        if file_ed is None or type(file_ed) is not EditorTab:
             file_ed = self.editor_tabs.currentWidget()
-            if file_ed is None:
+            if file_ed is None or type(file_ed) is not EditorTab:
                 return
         if not self.settings.value('Autosave') and file_ed.saved_text != file_ed.toPlainText():
-            button_text: str = WarningMessageBox(self, 'Warning', texts.save_warning).wait()
+            button_text: str = WarningMessageBox(self, 'Warning', texts.save_warning, WarningMessageBox.SAVE).wait()
             if button_text in texts.cancel_btn.values():
                 return
             elif button_text in texts.save_btn.values():
@@ -1723,7 +1821,7 @@ class IdeWindow(QMainWindow):
         """Save all settings when close"""
         for wgt in app.allWidgets():
             if type(wgt) is EditorTab and wgt.saved_text != wgt.toPlainText():
-                button_text: str = WarningMessageBox(self, 'Warning', texts.save_warning).wait()
+                button_text: str = WarningMessageBox(self, 'Warning', texts.save_warning, WarningMessageBox.SAVE).wait()
                 if button_text in texts.cancel_btn.values():
                     a0.ignore()
                     return
