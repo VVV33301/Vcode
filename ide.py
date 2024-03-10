@@ -126,6 +126,7 @@ class Highlighter(QSyntaxHighlighter):
         self.path: str = highlight_path
         self.mapping: dict[str, QTextCharFormat] = {}
         self.tab_words: list[str] = []
+        self.complete_words: list[str] = []
         with open(highlight_path) as highlight_file:
             for string in highlight_file.read().replace('\n', '').split(';')[:-1]:
                 expression, parameters = string.rsplit(' = ', maxsplit=1)
@@ -151,6 +152,10 @@ class Highlighter(QSyntaxHighlighter):
                             if params['tab'] == 1:
                                 for i in expression.split('|'):
                                     self.tab_words.append(i)
+                        case 'complete':
+                            if params['complete'] == 1:
+                                for i in expression.split('|'):
+                                    self.complete_words.append(i)
                 self.mapping[rf'{expression}']: QTextCharFormat = text_char
 
     def highlightBlock(self, text: str) -> None:
@@ -785,6 +790,7 @@ class EditorTab(QPlainTextEdit):
             self.line_num.setVisible(False)
         self.saved_text: str = self.toPlainText()
         self.highlighter: Highlighter | None = None
+        self.completer: QCompleter | None = None
         self.start_command: str | None = None
         self.debug_command: str | None = None
         self.language: str = ''
@@ -793,6 +799,11 @@ class EditorTab(QPlainTextEdit):
         """Add highlighter to code"""
         self.highlighter: Highlighter = highlighter
         self.highlighter.setDocument(self.document())
+        if self.highlighter.complete_words:
+            self.completer = QCompleter(self.highlighter.complete_words, self)
+            self.completer.setWidget(self)
+            self.completer.setCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
+            self.completer.activated.connect(self.insert_completion)
 
     def save(self) -> None:
         """Save text to file"""
@@ -853,6 +864,23 @@ class EditorTab(QPlainTextEdit):
             selection.cursor.clearSelection()
             selections.append(selection)
         self.setExtraSelections(selections)
+
+    def cursor_word(self, sentence: str) -> str:
+        """Cursor word"""
+        p: int = sentence.replace('\n', ' ').rfind(' ')
+        if p == -1:
+            return sentence
+        return sentence[p + 1:]
+
+    def insert_completion(self, text: str) -> None:
+        """Insert completion to text"""
+        p: int = self.toPlainText().replace('\n', ' ').rfind(' ')
+        cursor: QTextCursor = self.textCursor()
+        if p == -1:
+            self.setPlainText(text)
+        else:
+            self.setPlainText(self.toPlainText()[:p + 1] + text)
+        self.setTextCursor(cursor)
 
     def keyPressEvent(self, e: QKeyEvent) -> None:
         """Reaction on key pressed"""
@@ -966,6 +994,14 @@ class EditorTab(QPlainTextEdit):
             e.accept()
         else:
             QPlainTextEdit.keyPressEvent(self, e)
+
+        if not self.completer or not self.toPlainText():
+            return
+        self.completer.setCompletionPrefix(self.cursor_word(self.toPlainText()))
+        if len(self.completer.completionPrefix()) < 1:
+            self.completer.popup().hide()
+            return
+        self.completer.complete()
 
     def dragEnterEvent(self, e: QDragEnterEvent) -> None:
         pass
@@ -2104,6 +2140,11 @@ class HighlightMaker(QDialog):
         self.save_btn: QPushButton = QPushButton(texts.save_btn[self.lang_s.value('Language')], self)
         self.save_btn.clicked.connect(self.save_highlighter)
         layout.addWidget(self.save_btn, 1, 1, 1, 1)
+        if highlighter.startswith(USER + '/.Vcode/highlights') and highlighter.endswith(
+                ('python.hl', 'html.hl', 'json.hl')):
+            self.default_btn: QPushButton = QPushButton(texts.default_btn[self.lang_s.value('Language')], self)
+            self.default_btn.clicked.connect(self.default)
+            layout.addWidget(self.default_btn, 2, 0, 1, 2)
 
     def add_string(self) -> None:
         """Add new string"""
@@ -2114,6 +2155,22 @@ class HighlightMaker(QDialog):
         with open(self.highlighter, 'w') as hlf:
             for hms in self.findChildren(HighlightMakerString):
                 hlf.write(hms.rstring.text() + ' = {' + hms.json_params.text() + '};\n')
+
+    def default(self) -> None:
+        """Set default highlighter"""
+        if self.highlighter.endswith('python.hl'):
+            from default import python_hl
+            with open(self.highlighter, 'w') as hlf:
+                hlf.write(python_hl)
+        if self.highlighter.endswith('html.hl'):
+            from default import html_hl
+            with open(self.highlighter, 'w') as hlf:
+                hlf.write(html_hl)
+        if self.highlighter.endswith('json.hl'):
+            from default import json_hl
+            with open(self.highlighter, 'w') as hlf:
+                hlf.write(json_hl)
+        self.accept()
 
 
 if __name__ == '__main__':
