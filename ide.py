@@ -41,7 +41,7 @@ except ImportError:
     git = None
     GIT_INSTALLED: bool = False
 
-VERSION: str = '0.6.2'
+VERSION: str = '0.7.0'
 
 
 def resource_path(relative_path: str) -> str:
@@ -109,13 +109,6 @@ else:
         llf.write(html_hl)
     with open(USER + '/.Vcode/highlights/json.hl', 'w') as llf:
         llf.write(json_hl)
-if 'debug_command' not in language_list['Python'].keys():
-    from default import python_ll, html_ll, json_ll
-    language_list['Python']['debug_command'] = python_ll['debug_command']
-    language_list['Html']['debug_command'] = html_ll['debug_command']
-    language_list['JSON']['debug_command'] = json_ll['debug_command']
-    with open(USER + '/.Vcode/languages.json', 'w') as llf:
-        json.dump(language_list, llf)
 
 
 class Highlighter(QSyntaxHighlighter):
@@ -800,7 +793,7 @@ class EditorTab(QPlainTextEdit):
         self.highlighter: Highlighter = highlighter
         self.highlighter.setDocument(self.document())
         if self.highlighter.complete_words:
-            self.completer = QCompleter(self.highlighter.complete_words, self)
+            self.completer: QCompleter = QCompleter(self.highlighter.complete_words, self)
             self.completer.setWidget(self)
             self.completer.setCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
             self.completer.activated.connect(self.insert_completion)
@@ -865,22 +858,18 @@ class EditorTab(QPlainTextEdit):
             selections.append(selection)
         self.setExtraSelections(selections)
 
-    def cursor_word(self, sentence: str) -> str:
+    def cursor_word(self) -> str:
         """Cursor word"""
-        p: int = sentence.replace('\n', ' ').rfind(' ')
-        if p == -1:
-            return sentence
-        return sentence[p + 1:]
+        c: QTextCursor = self.textCursor()
+        c.select(QTextCursor.SelectionType.WordUnderCursor)
+        return c.selection().toPlainText()
 
     def insert_completion(self, text: str) -> None:
         """Insert completion to text"""
-        p: int = self.toPlainText().replace('\n', ' ').rfind(' ')
-        cursor: QTextCursor = self.textCursor()
-        if p == -1:
-            self.setPlainText(text)
-        else:
-            self.setPlainText(self.toPlainText()[:p + 1] + text)
-        self.setTextCursor(cursor)
+        c: QTextCursor = self.textCursor()
+        c.select(QTextCursor.SelectionType.WordUnderCursor)
+        c.insertText(text)
+        self.setTextCursor(c)
 
     def keyPressEvent(self, e: QKeyEvent) -> None:
         """Reaction on key pressed"""
@@ -992,12 +981,17 @@ class EditorTab(QPlainTextEdit):
             cursor.movePosition(QTextCursor.MoveOperation.Right)
             self.setTextCursor(cursor)
             e.accept()
+        elif e.key() == Qt.Key.Key_Alt and self.pr_settings.value('Completer') and self.completer.completionPrefix():
+            self.completer.activated.emit(self.completer.currentCompletion())
+            e.accept()
+            self.completer.popup().hide()
+            return
         else:
             QPlainTextEdit.keyPressEvent(self, e)
 
-        if not self.completer or not self.toPlainText():
+        if not self.completer or not self.toPlainText() or not self.pr_settings.value('Completer'):
             return
-        self.completer.setCompletionPrefix(self.cursor_word(self.toPlainText()))
+        self.completer.setCompletionPrefix(self.cursor_word())
         if len(self.completer.completionPrefix()) < 1:
             self.completer.popup().hide()
             return
@@ -1164,6 +1158,8 @@ class IdeWindow(QMainWindow):
         self.tool_bar: QToolBar = QToolBar(self)
         self.tool_bar.setMovable(False)
         self.addToolBar(Qt.ToolBarArea.BottomToolBarArea, self.tool_bar)
+        self.tool_bar.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.menuBar().setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
 
         self.start_btn: QAction = QAction(self)
         self.start_btn.setShortcut('F5')
@@ -1334,16 +1330,15 @@ class IdeWindow(QMainWindow):
         self.download_btn: QAction = QAction(self)
         self.download_btn.triggered.connect(lambda: openweb('https://vcodeide.ru/download/'))
 
-        if len(self.settings.allKeys()) == 8:
-            self.select_language(self.settings.value('Language'))
-            self.select_style(self.settings.value('Style'))
-        else:
+        if len(self.settings.allKeys()) != 9:
             if self.settings.value('Autorun') is None:
                 self.settings.setValue('Autorun', 0)
             if self.settings.value('Autosave') is None:
                 self.settings.setValue('Autosave', 0)
             if self.settings.value('Recent') is None:
                 self.settings.setValue('Recent', 1)
+            if self.settings.value('Completer') is None:
+                self.settings.setValue('Completer', 1)
             if self.settings.value('Font') is None:
                 if 'Consolas' in QFontDatabase.families():
                     self.settings.setValue('Font', QFont('Consolas', 12))
@@ -1359,6 +1354,8 @@ class IdeWindow(QMainWindow):
                             self.settings_window.findChildren(QRadioButton))).setChecked(True)
             if self.settings.value('Tab size') is None:
                 self.settings.setValue('Tab size', 4)
+        self.select_language(self.settings.value('Language'))
+        self.select_style(self.settings.value('Style'))
 
         if not self.options.allKeys():
             self.options.setValue('Splitter', [225, 775])
@@ -1384,6 +1381,10 @@ class IdeWindow(QMainWindow):
         self.settings_window.recent.setChecked(bool(self.settings.value('Recent')))
         self.settings_window.recent.stateChanged.connect(
             lambda: self.settings.setValue('Recent', int(self.settings_window.recent.isChecked())))
+
+        self.settings_window.completer.setChecked(bool(self.settings.value('Completer')))
+        self.settings_window.completer.stateChanged.connect(
+            lambda: self.settings.setValue('Completer', int(self.settings_window.completer.isChecked())))
 
         self.settings_window.tab_size.setValue(int(self.settings.value('Tab size')))
         self.settings_window.tab_size.valueChanged.connect(
@@ -1652,6 +1653,7 @@ class IdeWindow(QMainWindow):
         self.settings_window.autorun.setText(texts.autorun[language])
         self.settings_window.autosave.setText(texts.autosave[language])
         self.settings_window.recent.setText(texts.recent[language])
+        self.settings_window.completer.setText(texts.completer[language])
         self.settings_window.tab_size.setPrefix(texts.tab_size[language])
         self.settings_window.style_select_group.setTitle(texts.style_select_group[language])
         self.settings_window.font_select_group.setTitle(texts.font_select_group[language])
@@ -1924,10 +1926,13 @@ class SettingsDialog(QDialog):
         self.recent: QCheckBox = QCheckBox(self)
         self.check_boxes_layout.addWidget(self.recent)
 
+        self.completer: QCheckBox = QCheckBox(self)
+        self.check_boxes_layout.addWidget(self.completer)
+
         self.tab_size: QSpinBox = QSpinBox(self)
         self.tab_size.setMinimum(1)
         self.tab_size.setMaximum(16)
-        self.check_boxes_layout.addWidget(self.tab_size)
+        self.font_select_layout.addWidget(self.tab_size)
 
         self.encoding: QComboBox = QComboBox(self)
         self.encoding.addItems(ENCODINGS)

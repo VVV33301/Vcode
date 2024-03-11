@@ -48,6 +48,7 @@ new_window_btn = {'en': 'Open in new window', 'ru': 'Открыть в ново�
 autorun = {'en': 'Autorun', 'ru': 'Автозагрузка', 'de': 'Automatisch laden', 'ch': '自动加载'}
 autosave = {'en': 'Autosave', 'ru': 'Автосохранение', 'de': 'Automatisches Speichern', 'ch': '自动保存'}
 recent = {'en': 'Open recent', 'ru': 'Открыть недавние', 'de': 'Zuletzt öffnen', 'ch': '打开最近的'}
+completer = {'en': 'Completer', 'ru': 'Подсказки', 'de': 'Vervollständiger', 'ch': '完成者'}
 tab_size = {'en': 'Tab size: ', 'ru': 'Размер отступа: ', 'de': 'Tab-Größe: ', 'ch': '缩进尺寸: '}
 style_select_group = {'en': 'Style', 'ru': 'Стиль', 'de': 'Stil', 'ch': '风格'}
 font_select_group = {'en': 'Font', 'ru': 'Шрифт', 'de': 'Schriftart', 'ch': '字体'}
