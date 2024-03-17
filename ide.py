@@ -788,6 +788,9 @@ class EditorTab(QPlainTextEdit):
         self.debug_command: str | None = None
         self.language: str = ''
 
+        self.autosave_timer: QTimer = QTimer(self)
+        self.autosave_timer.timeout.connect(self.save)
+
     def set_highlighter(self, highlighter: Highlighter) -> None:
         """Add highlighter to code"""
         self.highlighter: Highlighter = highlighter
@@ -800,6 +803,7 @@ class EditorTab(QPlainTextEdit):
 
     def save(self) -> None:
         """Save text to file"""
+        self.autosave_timer.stop()
         with open(self.file, 'w', encoding=self.pr_settings.value('Encoding')) as sf:
             sf.write(self.toPlainText())
         self.saved_text: str = self.toPlainText()
@@ -981,7 +985,8 @@ class EditorTab(QPlainTextEdit):
             cursor.movePosition(QTextCursor.MoveOperation.Right)
             self.setTextCursor(cursor)
             e.accept()
-        elif e.key() == Qt.Key.Key_Alt and self.pr_settings.value('Completer') and self.completer.completionPrefix():
+        elif e.key() == Qt.Key.Key_Alt and (self.completer is not None and self.pr_settings.value('Completer') and
+                                            self.completer.completionPrefix()):
             self.completer.activated.emit(self.completer.currentCompletion())
             e.accept()
             self.completer.popup().hide()
@@ -1330,30 +1335,30 @@ class IdeWindow(QMainWindow):
         self.download_btn: QAction = QAction(self)
         self.download_btn.triggered.connect(lambda: openweb('https://vcodeide.ru/download/'))
 
-        if len(self.settings.allKeys()) != 9:
-            if self.settings.value('Autorun') is None:
-                self.settings.setValue('Autorun', 0)
-            if self.settings.value('Autosave') is None:
-                self.settings.setValue('Autosave', 0)
-            if self.settings.value('Recent') is None:
-                self.settings.setValue('Recent', 1)
-            if self.settings.value('Completer') is None:
-                self.settings.setValue('Completer', 1)
-            if self.settings.value('Font') is None:
-                if 'Consolas' in QFontDatabase.families():
-                    self.settings.setValue('Font', QFont('Consolas', 12))
-                else:
-                    self.settings.setValue('Font', QFont())
-            if self.settings.value('Language') is None:
-                self.select_language('en')
-            if self.settings.value('Style') is None:
-                self.select_style('System')
-            if self.settings.value('Encoding') is None:
-                self.settings.setValue('Encoding', 'utf-8')
-                next(filter(lambda x: x.text() == 'System',
-                            self.settings_window.findChildren(QRadioButton))).setChecked(True)
-            if self.settings.value('Tab size') is None:
-                self.settings.setValue('Tab size', 4)
+        if self.settings.value('Autorun') is None:
+            self.settings.setValue('Autorun', 0)
+        if self.settings.value('Autosave') is None:
+            self.settings.setValue('Autosave', 0)
+        if self.settings.value('Recent') is None:
+            self.settings.setValue('Recent', 1)
+        if self.settings.value('Completer') is None:
+            self.settings.setValue('Completer', 1)
+        if self.settings.value('Font') is None:
+            if 'Consolas' in QFontDatabase.families():
+                self.settings.setValue('Font', QFont('Consolas', 12))
+            else:
+                self.settings.setValue('Font', QFont())
+        if self.settings.value('Language') is None:
+            self.select_language('en')
+        if self.settings.value('Style') is None:
+            self.select_style('System')
+        if self.settings.value('Encoding') is None:
+            self.settings.setValue('Encoding', 'utf-8')
+            next(filter(lambda x: x.text() == 'System',
+                        self.settings_window.findChildren(QRadioButton))).setChecked(True)
+        if self.settings.value('Tab size') is None:
+            self.settings.setValue('Tab size', 4)
+
         self.select_language(self.settings.value('Language'))
         self.select_style(self.settings.value('Style'))
 
@@ -1711,6 +1716,7 @@ class IdeWindow(QMainWindow):
                 return
             elif button_text in texts.save_btn.values():
                 file_ed.save()
+        self.show_monitor()
         threading.Thread(target=self.program, args=[file_ed, True]).start()
 
     def program(self, code: EditorTab, debug: bool = False) -> None:
@@ -1804,7 +1810,7 @@ class IdeWindow(QMainWindow):
         """Save file when text changes"""
         if self.settings.value('Autosave'):
             self.editor_tabs.currentWidget().saved_text = self.editor_tabs.currentWidget().toPlainText()
-            self.editor_tabs.currentWidget().save()
+            self.editor_tabs.currentWidget().autosave_timer.start(1000)
 
     def git_open(self) -> None:
         """Open git repository on computer"""
@@ -2041,6 +2047,8 @@ class LanguageSettingsDialog(QDialog):
         layout: QGridLayout = QGridLayout(self)
         self.setLayout(layout)
         self.lang_s: QSettings = QSettings('Vcode', 'Settings').value('Language')
+        hist: dict[str, list[str]] = json.loads(QSettings('Vcode', 'CompilerHistory').value(
+            language, '{"start_command": [], "debug_command": []}'))
 
         self.highlight: QLineEdit = QLineEdit(language_list[self.language]['highlight'], self)
         self.highlight.setPlaceholderText('Highlight file path')
@@ -2052,14 +2060,22 @@ class LanguageSettingsDialog(QDialog):
         self.file_formats.contextMenuEvent = LineEditMenu(self.file_formats)
         layout.addWidget(self.file_formats, 1, 0, 1, 6)
 
-        self.start_command: QLineEdit = QLineEdit(language_list[self.language]['start_command'], self)
+        self.start_command: QComboBox = QComboBox(self)
+        self.start_command.setObjectName('asline')
+        self.start_command.addItem(language_list[self.language]['start_command'])
+        self.start_command.setEditable(True)
         self.start_command.setPlaceholderText('Start command')
-        self.start_command.contextMenuEvent = LineEditMenu(self.start_command)
+        self.start_command.contextMenuEvent = LineEditMenu(self.start_command.lineEdit())
+        self.start_command.addItems(hist['start_command'])
         layout.addWidget(self.start_command, 2, 0, 1, 6)
 
-        self.debug_command: QLineEdit = QLineEdit(language_list[self.language]['debug_command'], self)
+        self.debug_command: QComboBox = QComboBox(self)
+        self.debug_command.setObjectName('asline')
+        self.debug_command.addItem(language_list[self.language]['debug_command'])
+        self.debug_command.setEditable(True)
         self.debug_command.setPlaceholderText('Debug command')
-        self.debug_command.contextMenuEvent = LineEditMenu(self.debug_command)
+        self.debug_command.contextMenuEvent = LineEditMenu(self.debug_command.lineEdit())
+        self.debug_command.addItems(hist['debug_command'])
         layout.addWidget(self.debug_command, 3, 0, 1, 6)
 
         self.find_highlight: QPushButton = QPushButton(texts.find_highlight_btn[self.lang_s], self)
@@ -2093,14 +2109,16 @@ class LanguageSettingsDialog(QDialog):
         a, _ = QFileDialog.getOpenFileName(
             self, directory=USER, filter='Executable files (*.exe);;Shell files (*.sh *.bat *.vbs);;All files (*.*)')
         if a:
-            self.start_command.setText(f'"{a}" "{{filename}}"')
+            self.start_command.insertItem(0, f'"{a}" "{{filename}}"')
+            self.start_command.setCurrentIndex(0)
 
     def find_debugger(self):
         """Search debugger in files"""
         a, _ = QFileDialog.getOpenFileName(
             self, directory=USER, filter='Executable files (*.exe);;Shell files (*.sh *.bat *.vbs);;All files (*.*)')
         if a:
-            self.start_command.setText(f'"{a}" "{{filename}}"')
+            self.start_command.insertItem(0, f'"{a}" "{{filename}}"')
+            self.start_command.setCurrentIndex(0)
 
     def highlight_maker_call(self) -> None:
         """Start highlight maker"""
@@ -2116,9 +2134,13 @@ class LanguageSettingsDialog(QDialog):
         """Save a language"""
         language_list[self.language]: dict[str, str] = {'highlight': self.highlight.text(),
                                                         'file_formats': [f for f in self.file_formats.text().split()],
-                                                        'start_command': self.start_command.text()}
+                                                        'start_command': self.start_command.currentText(),
+                                                        'debug_command': self.debug_command.currentText()}
         with open(USER + '/.Vcode/languages.json', 'w') as llfw:
             json.dump(language_list, llfw)
+        QSettings('Vcode', 'CompilerHistory').setValue(self.language, json.dumps({
+            'start_command': list(set(self.start_command.itemText(i) for i in range(self.start_command.count()))),
+            'debug_command': list(set(self.debug_command.itemText(i) for i in range(self.debug_command.count())))}))
         self.accept()
 
 

@@ -72,7 +72,7 @@ QAbstractButton:hover {
     background-color: rgb(185, 185, 174);
 }
 
-QLineEdit {
+QLineEdit, #asline {
     border-radius: 6px;
     border-width: 2px;
     border-color: rgb(60, 60, 90);
@@ -82,7 +82,7 @@ QLineEdit {
     width: 10em;
 }
 
-QLineEdit:hover {
+QLineEdit:hover, #asline:hover {
     background-color: rgb(185, 185, 174);
 }
 
