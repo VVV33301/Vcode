@@ -5,6 +5,12 @@
         "start_command": "python \"{filename}\"",
         "debug_command": "python -m pdb \"{filename}\""
     },
+    "PHP": {
+        "highlight": "php.hl",
+        "file_formats": ["php"],
+        "start_command": "php \"{filename}\"",
+        "debug_command": ""
+    },
     "Html": {
         "highlight": "html.hl",
         "file_formats": ["htm", "html"],

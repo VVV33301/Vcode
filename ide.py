@@ -50,6 +50,10 @@ if exists(USER + '/.Vcode/languages.json'):
         language_list["JSON"] = json_ll
         with open(USER + '/.Vcode/languages.json', 'w') as llf:
             json.dump(language_list, llf)
+    if 'PHP' not in language_list.keys():
+        language_list["PHP"] = php_ll
+        with open(USER + '/.Vcode/languages.json', 'w') as llf:
+            json.dump(language_list, llf)
 else:
     language_list: dict[str, dict[str, str]] = {"Python": python_ll, "Html": html_ll, "JSON": json_ll}
     if not exists(USER + '/.Vcode/'):
@@ -67,6 +71,9 @@ if not exists(USER + '/.Vcode/highlights/html.hl'):
 if not exists(USER + '/.Vcode/highlights/json.hl'):
     with open(USER + '/.Vcode/highlights/json.hl', 'w') as llf:
         llf.write(json_hl)
+if not exists(USER + '/.Vcode/highlights/php.hl'):
+    with open(USER + '/.Vcode/highlights/php.hl', 'w') as llf:
+        llf.write(php_hl)
 
 
 if __name__ == '__main__':

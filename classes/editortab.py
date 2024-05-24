@@ -254,7 +254,7 @@ class EditorTab(QPlainTextEdit):
         if len(self.completer.completionPrefix()) < 1:
             self.completer.popup().hide()
             return
-        self.completer.complete()
+        self.completer.complete(QRect(self.cursorRect().x(), self.cursorRect().y(), 200, 20))
 
     def dragEnterEvent(self, e: QDragEnterEvent) -> None:
         pass
