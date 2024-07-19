@@ -1,7 +1,7 @@
 from PyQt6.QtWidgets import QDialog, QVBoxLayout, QLabel, QPushButton
 from PyQt6.QtGui import QFont, QPixmap
 from PyQt6.QtCore import Qt
-from os import startfile
+from webbrowser import open_new
 from functions import resource_path
 from ide import VERSION
 
@@ -34,7 +34,7 @@ class AboutDialog(QDialog):
         layout.addWidget(self.text)
 
         self.license: QPushButton = QPushButton('Read license', self)
-        self.license.clicked.connect(lambda: startfile(resource_path('LICENSE')))
+        self.license.clicked.connect(lambda: open_new('file:///' + resource_path('LICENSE')))
         layout.addWidget(self.license)
 
         self.text2: QLabel = QLabel('This program powered by PyQt6', self)

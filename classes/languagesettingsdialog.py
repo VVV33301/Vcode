@@ -1,23 +1,25 @@
-from PyQt6.QtWidgets import QDialog, QGridLayout, QComboBox, QLineEdit, QPushButton, QFileDialog
+from PyQt6.QtWidgets import QDialog, QGridLayout, QComboBox, QLineEdit, QPushButton, QFileDialog, QMainWindow
 from PyQt6.QtCore import QSettings
 import json
 from default import USER
 import texts
 from .lineedit import LineEditMenu
 from .highlightmaker import HighlightMaker
+from .warning import WarningMessageBox
 from ide import language_list
 
 
 class LanguageSettingsDialog(QDialog):
     """Settings of programming languages"""
 
-    def __init__(self, language: str, *args, **kwargs) -> None:
+    def __init__(self, language: str, app: QMainWindow, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self.setMinimumSize(400, 250)
         self.language: str = language
+        self.app: QMainWindow = app
         layout: QGridLayout = QGridLayout(self)
         self.setLayout(layout)
-        self.lang_s: QSettings = QSettings('Vcode', 'Settings').value('Language')
+        self.lang_s: str = QSettings('Vcode', 'Settings').value('Language')
         hist: dict[str, list[str]] = json.loads(QSettings('Vcode', 'CompilerHistory').value(
             language, '{"start_command": [], "debug_command": []}'))
 
@@ -103,13 +105,18 @@ class LanguageSettingsDialog(QDialog):
 
     def save_language(self) -> None:
         """Save a language"""
-        language_list[self.language]: dict[str, str] = {'highlight': self.highlight.text(),
-                                                        'file_formats': [f for f in self.file_formats.text().split()],
-                                                        'start_command': self.start_command.currentText(),
-                                                        'debug_command': self.debug_command.currentText()}
-        with open(USER + '/.Vcode/languages.json', 'w') as llfw:
-            json.dump(language_list, llfw)
-        QSettings('Vcode', 'CompilerHistory').setValue(self.language, json.dumps({
-            'start_command': list(set(self.start_command.itemText(i) for i in range(self.start_command.count()))),
-            'debug_command': list(set(self.debug_command.itemText(i) for i in range(self.debug_command.count())))}))
+        new_lang_settings: dict[str, str] = {'highlight': self.highlight.text(),
+                                             'file_formats': [f for f in self.file_formats.text().split()],
+                                             'start_command': self.start_command.currentText(),
+                                             'debug_command': self.debug_command.currentText()}
+        if new_lang_settings != language_list[self.language]:
+            language_list[self.language] = new_lang_settings
+            with open(USER + '/.Vcode/languages.json', 'w') as llfw:
+                json.dump(language_list, llfw)
+            QSettings('Vcode', 'CompilerHistory').setValue(self.language, json.dumps({
+                'start_command': list(set(self.start_command.itemText(i) for i in range(self.start_command.count()))),
+                'debug_command': list(set(self.debug_command.itemText(i) for i in range(self.debug_command.count())))}))
+            rst: str = WarningMessageBox(self, 'Reset', texts.restart_warning, WarningMessageBox.RESTART).wait()
+            if rst == texts.restart_btn[self.lang_s]:
+                self.app.restart()
         self.accept()

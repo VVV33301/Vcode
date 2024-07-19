@@ -8,6 +8,7 @@ class WarningMessageBox(QMessageBox):
     INFO: int = 0
     SAVE: int = 1
     UPDATE: int = 2
+    RESTART: int = 3
 
     def __init__(self, parent: QWidget, title: str, text_all_lang: dict[str, str],
                  msg_type: int = INFO) -> None:
@@ -27,6 +28,11 @@ class WarningMessageBox(QMessageBox):
             self.setDefaultButton(self.StandardButton.Yes)
             self.button(self.StandardButton.Yes).setText(texts.update_btn[lang])
             self.button(self.StandardButton.No).setText(texts.cancel_btn[lang])
+        elif msg_type == self.RESTART:
+            self.setStandardButtons(self.StandardButton.Ok | self.StandardButton.Ignore)
+            self.setDefaultButton(self.StandardButton.Ok)
+            self.button(self.StandardButton.Ok).setText(texts.restart_btn[lang])
+            self.button(self.StandardButton.Ignore).setText(texts.later_btn[lang])
         else:
             self.setStandardButtons(self.StandardButton.Ok)
 

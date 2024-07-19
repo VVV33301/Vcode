@@ -18,6 +18,8 @@ feedback_btn = {'en': 'Feedback', 'ru': 'Обратная связь', 'de': 'R�
 delete_btn = {'en': 'Delete', 'ru': 'Удалить', 'de': 'Löschen', 'ch': '删除', 'hi': 'मिटाना'}
 rename_btn = {'en': 'Rename', 'ru': 'Переименовать', 'de': 'Umbenennen', 'ch': '改名', 'hi': 'नाम बदलें'}
 add_btn = {'en': 'Add', 'ru': 'Добавить', 'de': 'Hinzufügen', 'ch': '添加', 'hi': 'जोड़ना'}
+reset_btn = {'en': 'Reset settings', 'ru': 'Сбросить настройки', 'de': 'Einstellungen zurücksetzen', 'ch': '重新设置',
+             'hi': 'सेटिंग्स फिर से करिए'}
 edit_highlight_btn = {'en': 'Edit highlight', 'ru': 'Редактировать выделение', 'de': 'Hervorhebung bearbeiten',
                       'ch': '编辑突出显示', 'hi': 'हाइलाइट संपादित करें'}
 remove_btn = {'en': 'Remove', 'ru': 'Удалить', 'de': 'Löschen', 'ch': '删除', 'hi': 'हटाना'}
@@ -26,6 +28,9 @@ check_btn = {'en': 'Check updates', 'ru': 'Проверить обновлени
 download_btn = {'en': 'Update Vcode', 'ru': 'Обновить Vcode', 'de': 'Vcode aktualisieren', 'ch': '更新Vcode',
                 'hi': 'Vcode अपडेट करें'}
 update_btn = {'en': 'Update', 'ru': 'Обновить', 'de': 'Aktualisieren', 'ch': '更新', 'hi': 'अद्यतन'}
+restart_btn = {'en': 'Restart now', 'ru': 'Перезагрузить сейчас', 'de': 'Jetzt neustarten', 'ch': '马上重启',
+               'hi': 'अब रिबूट करें'}
+later_btn = {'en': 'Later', 'ru': 'Позже', 'de': 'Später', 'ch': '之后', 'hi': 'बाद में'}
 edit_btn = {'en': 'Edit', 'ru': 'Правка', 'de': 'Bearbeiten', 'ch': '编辑', 'hi': 'संपादन करना'}
 view_btn = {'en': 'View', 'ru': 'Вид', 'de': 'Sicht', 'ch': '看法', 'hi': 'देखना'}
 monitor_btn = {'en': 'System monitor', 'ru': 'Системный монитор', 'de': 'Systemmonitor', 'ch': '系统监控',
@@ -39,6 +44,11 @@ cancel_btn = {'en': 'Cancel', 'ru': 'Отмена', 'de': 'Stornieren', 'ch': '�
 font_sz_menu = {'en': 'Font scale', 'ru': 'Масштаб шрифта', 'de': 'Schriftskala', 'ch': '字体比例', 'hi': 'फ़ॉन्ट स्केल'}
 open_uns_btn = {'en': 'Open in other program', 'ru': 'Открыть в другой программе',
                 'de': 'In einem anderen Programm öffnen', 'ch': '在其他程序中打开', 'hi': 'अन्य प्रोग्राम में खोलें'}
+new_proj_btn = {'en': 'New Project', 'ru': 'Новый проект', 'de': 'Neues Projekt', 'ch': '新项目', 'hi': 'नई परियोजना'}
+open_proj_btn = {'en': 'Open Project', 'ru': 'Открыть проект', 'de': 'Projekt öffnen', 'ch': '打开项目',
+                 'hi': 'परियोजना खोलें'}
+close_proj_btn = {'en': 'Close Project', 'ru': 'Закрыть проект', 'de': 'Projekt schließen', 'ch': '关闭项目',
+                  'hi': 'परियोजना बंद करें'}
 find_btn = {'en': 'Find', 'ru': 'Поиск', 'de': 'Finden', 'ch': '寻找', 'hi': 'खोजो'}
 find_highlight_btn = {'en': 'Find highlight', 'ru': 'Поиск подсветки', 'de': 'Highlight finden', 'ch': '寻找亮点',
                       'hi': 'हाइलाइट ढूंढें'}
@@ -89,3 +99,7 @@ update_warning = {'en': 'New version of Vcode is available. Do you want to updat
 update_not = {'en': 'You have the latest version of Vcode installed', 'ru': 'У вас установлена последняя версия Vcode',
               'de': 'Sie haben die neueste Version von Vcode installiert', 'ch': '您拥有最新版本的 Vcode',
               'hi': 'आपके पास Vcode का नवीनतम संस्करण स्थापित है'}
+restart_warning = {'en': 'Requires Vcode restart to save changes',
+                   'ru': 'Требуется перезапуск Vcode для сохранения изменений',
+                   'de': 'Erfordert einen Vcode-Neustart, um die Änderungen zu speichern',
+                   'ch': '需要重新启动 Vcode 才能保存更改', 'hi': 'परिवर्तनों को सहेजने के लिए Vcode पुनः आरंभ करना आवश्यक है'}

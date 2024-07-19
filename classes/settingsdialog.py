@@ -1,11 +1,12 @@
 from PyQt6.QtWidgets import (QDialog, QVBoxLayout, QGroupBox, QHBoxLayout, QComboBox, QSpinBox, QWidget, QCheckBox,
-                             QListWidget, QListWidgetItem, QGridLayout, QMenu)
+                             QListWidget, QListWidgetItem, QGridLayout, QMenu, QMainWindow)
 from PyQt6.QtGui import QAction, QFontDatabase, QContextMenuEvent
 from PyQt6.QtCore import QSettings
 import json
-from default import USER, ENCODINGS
+from default import *
 from .inputdialog import InputDialog
 from .languagesettingsdialog import LanguageSettingsDialog
+from .warning import WarningMessageBox
 from ide import language_list
 import texts
 
@@ -13,9 +14,11 @@ import texts
 class SettingsDialog(QDialog):
     """Settings window"""
 
-    def __init__(self, *args, **kwargs) -> None:
-        super().__init__(*args, **kwargs)
+    def __init__(self, parent: QMainWindow, *args, **kwargs) -> None:
+        super().__init__(parent, *args, **kwargs)
         self.setModal(True)
+        self.parent: QMainWindow = parent
+        self.lang: str = QSettings('Vcode', 'Settings').value('Language')
 
         self.style_select_group: QGroupBox = QGroupBox(self)
         self.style_select_layout: QVBoxLayout = QVBoxLayout()
@@ -39,7 +42,7 @@ class SettingsDialog(QDialog):
         self.check_boxes_group.setLayout(self.check_boxes_layout)
 
         self.language: QComboBox = QComboBox(self)
-        self.language.addItems(['EN', 'RU', 'DE', 'CH'])
+        self.language.addItems(LANGUAGES.keys())
         self.check_boxes_layout.addWidget(self.language)
 
         self.autorun: QCheckBox = QCheckBox(self)
@@ -82,9 +85,13 @@ class SettingsDialog(QDialog):
         self.add_btn: QAction = QAction(self)
         self.add_btn.triggered.connect(self.add_language)
 
+        self.reset_btn: QAction = QAction(self)
+        self.reset_btn.triggered.connect(self.reset_languages)
+
     def language_settings(self) -> None:
         """Open settings of language"""
-        lsd: LanguageSettingsDialog = LanguageSettingsDialog(self.languages_list.currentItem().text(), self)
+        lsd: LanguageSettingsDialog = LanguageSettingsDialog(
+            self.languages_list.currentItem().text(), self.parent, self)
         lsd.setWindowTitle(f'{self.languages_list.currentItem().text()} - Vcode languages')
         lsd.exec()
 
@@ -93,13 +100,15 @@ class SettingsDialog(QDialog):
         menu: QMenu = QMenu(self)
         item: QListWidgetItem = self.languages_list.itemAt(event.pos())
         if item:
-            self.remove_btn.setText(texts.remove_btn[QSettings('Vcode', 'Settings').value('Language')])
+            self.remove_btn.setText(texts.remove_btn[self.lang])
             menu.addAction(self.remove_btn)
-            if item.text() in ['Python', 'Html', 'JSON']:
+            if item.text() in ['Python', 'Html', 'JSON', 'PHP']:
                 menu.setEnabled(False)
         else:
-            self.add_btn.setText(texts.add_btn[QSettings('Vcode', 'Settings').value('Language')])
+            self.add_btn.setText(texts.add_btn[self.lang])
             menu.addAction(self.add_btn)
+            self.reset_btn.setText(texts.reset_btn[self.lang])
+            menu.addAction(self.reset_btn)
         menu.popup(event.globalPos())
 
     def remove_language(self) -> None:
@@ -119,3 +128,21 @@ class SettingsDialog(QDialog):
             with open(USER + '/.Vcode/languages.json', 'w') as llfw:
                 json.dump(language_list, llfw)
         self.languages_list.addItem(QListWidgetItem(name.text_value(), self.languages_list))
+
+    def reset_languages(self) -> None:
+        """Reset all languages"""
+        language_list: dict[str, dict[str, str]] = {"Python": python_ll, "Html": html_ll, "JSON": json_ll,
+                                                    "PHP": php_ll}
+        with open(USER + '/.Vcode/languages.json', 'w') as llf:
+            json.dump(language_list, llf)
+        with open(USER + '/.Vcode/highlights/python.hl', 'w') as llf:
+            llf.write(python_hl)
+        with open(USER + '/.Vcode/highlights/html.hl', 'w') as llf:
+            llf.write(html_hl)
+        with open(USER + '/.Vcode/highlights/json.hl', 'w') as llf:
+            llf.write(json_hl)
+        with open(USER + '/.Vcode/highlights/php.hl', 'w') as llf:
+            llf.write(php_hl)
+        rst: str = WarningMessageBox(self, 'Reset', texts.restart_warning, WarningMessageBox.RESTART).wait()
+        if rst == texts.restart_btn[self.lang]:
+            self.parent.restart()

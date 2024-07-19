@@ -26,7 +26,7 @@ from .texteditfullscreen import TextEditFullscreenMenu
 from .texteditwindow import TextEditWindowMenu
 from .treeview import TreeViewMenu
 from .warning import WarningMessageBox
-from default import USER
+from default import USER, LANGUAGES
 from ide import VERSION, style, language_list
 
 
@@ -290,9 +290,10 @@ class IdeWindow(QMainWindow):
             self.options.setValue('Geometry', 'Not init')
         self.splitter.setSizes(map(int, self.options.value('Splitter')))
 
-        self.settings_window.language.setCurrentText(self.settings.value('Language').upper())
+        self.settings_window.language.setCurrentText(
+            next(filter(lambda lg: lg[1] == self.settings.value('Language'), LANGUAGES.items()))[0])
         self.settings_window.language.currentTextChanged.connect(
-            lambda: self.select_language(self.settings_window.language.currentText().lower()))
+            lambda: self.select_language(LANGUAGES[self.settings_window.language.currentText()]))
 
         self.settings_window.encoding.setCurrentText(self.settings.value('Encoding'))
         self.settings_window.encoding.currentTextChanged.connect(
@@ -608,7 +609,7 @@ class IdeWindow(QMainWindow):
         if sys.platform == 'win32':
             system('start "Vcode terminal" powershell')
         elif sys.platform.startswith('linux'):
-            system('gnome-terminal')
+            system('bash')
         else:
             self.exit_code.setText('Can`t start terminal in this operating system')
 
@@ -769,6 +770,21 @@ class IdeWindow(QMainWindow):
                     git.Repo.clone_from(git_file.text_value(), path)
         else:
             self.exit_code.setText('Git not installed')
+
+    def restart(self) -> None:
+        """Restart the program"""
+        self.close()
+        self.__init__()
+        last: QSettings = QSettings('Vcode', 'Last')
+        for n in last.allKeys():
+            if n != 'current' and last.value(n) is not None:
+                if n[0] == 'V':
+                    self.add_tab(n[1:], int(last.value(n)))
+                elif n[0] == 'G':
+                    self.add_git_tab(n[1:], int(last.value(n)))
+            elif last.value('current') is not None:
+                self.editor_tabs.setCurrentIndex(int(last.value('current')))
+        last.clear()
 
     def dragEnterEvent(self, event: QDragEnterEvent) -> None:
         mime: QMimeData = event.mimeData()

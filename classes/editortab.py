@@ -1,9 +1,11 @@
+import sys
+
 from PyQt6.QtWidgets import QPlainTextEdit, QPushButton, QCompleter, QTextEdit
 from PyQt6.QtGui import (QResizeEvent, QPaintEvent, QPainter, QTextCursor, QColor, QKeyEvent, QDragEnterEvent,
                          QDropEvent, QPalette, QTextFormat, QTextBlock)
 from PyQt6.QtCore import QSettings, Qt, QTimer, QRect, QMimeData
 import re
-from os import startfile
+from os import system
 from .highlighter import Highlighter
 from .linenumberarea import LineNumberArea
 import texts
@@ -31,7 +33,7 @@ class EditorTab(QPlainTextEdit):
             self.setPlainText(texts.unsupported_encoding[self.pr_settings.value('Language')])
             self.te: QPushButton = QPushButton(texts.open_uns_btn[self.pr_settings.value('Language')], self)
             self.te.setGeometry(50, self.font().pointSize() + 20, 200, 30)
-            self.te.clicked.connect(lambda: startfile(self.file))
+            self.te.clicked.connect(self.open_in_other)
             self.setReadOnly(True)
             self.save = lambda: None
             self.line_num.setVisible(False)
@@ -128,6 +130,15 @@ class EditorTab(QPlainTextEdit):
         c.select(QTextCursor.SelectionType.WordUnderCursor)
         c.insertText(text)
         self.setTextCursor(c)
+
+    def open_in_other(self):
+        """Open file in other program"""
+        if sys.platform == 'win32':
+            system(f'start "" "{self.file}"')
+        elif sys.platform.startswith('linux'):
+            system(f'xdg-open "{self.file}"')
+        else:
+            system(f'open "{self.file}"')
 
     def keyPressEvent(self, e: QKeyEvent) -> None:
         """Reaction on key pressed"""
