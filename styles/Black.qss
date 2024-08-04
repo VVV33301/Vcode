@@ -40,7 +40,7 @@ QListView {
 }
 
 QHeaderView {
-    color: black;
+    color: white;
 }
 
 QTreeView::item:hover, QListView::item:hover {

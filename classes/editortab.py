@@ -146,6 +146,12 @@ class EditorTab(QPlainTextEdit):
         cursor: QTextCursor = self.textCursor()
         tab_sz: int = self.pr_settings.value('Tab size')
         if e.key() == Qt.Key.Key_Tab:
+            if (self.completer is not None and self.pr_settings.value('Completer') and
+                    0 < len(self.completer.completionPrefix()) < len(self.completer.currentCompletion())):
+                self.completer.activated.emit(self.completer.currentCompletion())
+                e.accept()
+                self.completer.popup().hide()
+                return
             cursor.insertText(' ' * tab_sz + f'\n{" " * tab_sz}'.join(
                 cursor.selection().toPlainText().split('\n')))
             self.setTextCursor(cursor)
@@ -250,12 +256,6 @@ class EditorTab(QPlainTextEdit):
             cursor.movePosition(QTextCursor.MoveOperation.Right)
             self.setTextCursor(cursor)
             e.accept()
-        elif e.key() == Qt.Key.Key_Alt and (self.completer is not None and self.pr_settings.value('Completer') and
-                                            self.completer.completionPrefix()):
-            self.completer.activated.emit(self.completer.currentCompletion())
-            e.accept()
-            self.completer.popup().hide()
-            return
         else:
             QPlainTextEdit.keyPressEvent(self, e)
 
