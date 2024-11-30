@@ -222,6 +222,25 @@ class IdeWindow(QMainWindow):
         self.settings_btn.triggered.connect(self.settings_window.exec)
         self.menuBar().addAction(self.settings_btn)
 
+        self.proj_menu: QMenu = QMenu(self)
+        self.menuBar().addMenu(self.proj_menu)
+
+        self.new_proj_btn: QAction = QAction(self)
+        self.new_proj_btn.triggered.connect(self.new_project)
+        self.proj_menu.addAction(self.new_proj_btn)
+
+        self.open_proj_btn: QAction = QAction(self)
+        self.open_proj_btn.triggered.connect(self.open_project)
+        self.proj_menu.addAction(self.open_proj_btn)
+
+        self.save_proj_btn: QAction = QAction(self)
+        self.save_proj_btn.triggered.connect(self.save_project)
+        self.proj_menu.addAction(self.save_proj_btn)
+
+        self.close_proj_btn: QAction = QAction(self)
+        self.close_proj_btn.triggered.connect(self.close_project)
+        self.proj_menu.addAction(self.close_proj_btn)
+
         self.git_menu: QMenu = QMenu('Git', self)
         self.menuBar().addMenu(self.git_menu)
 
@@ -236,6 +255,18 @@ class IdeWindow(QMainWindow):
         self.git_clone_btn: QAction = QAction('Clone', self)
         self.git_clone_btn.triggered.connect(self.git_clone)
         self.git_menu.addAction(self.git_clone_btn)
+
+        self.commit: QAction = QAction('Commit', self)
+        self.commit.triggered.connect(self.git_commit)
+        self.git_menu.addAction(self.commit)
+
+        self.push: QAction = QAction('Push', self)
+        self.push.triggered.connect(self.git_push)
+        self.git_menu.addAction(self.push)
+
+        self.merge: QAction = QAction('Merge', self)
+        self.merge.triggered.connect(self.git_merge)
+        self.git_menu.addAction(self.merge)
 
         self.about_menu: QMenu = QMenu(self)
         self.menuBar().addMenu(self.about_menu)
@@ -323,6 +354,9 @@ class IdeWindow(QMainWindow):
 
         self.settings_window.font_size.setValue(self.settings.value('Font').pointSize())
         self.settings_window.font_size.valueChanged.connect(self.select_font)
+
+        self.project: dict[str, str] | None = None
+        self.git_repo: git.Repo | None = None
 
         self.show_ide()
         self.check_updates(show_else=False)
@@ -428,12 +462,18 @@ class IdeWindow(QMainWindow):
         editor.setTextCursor(c)
         editor.setFocus()
         editor.cursorPositionChanged.connect(editor.highlight_current_line)
-        for langname, language in language_list.items():
-            if filename.rsplit('.', maxsplit=1)[-1] in language['file_formats']:
-                editor.set_highlighter(Highlighter(resource_path(language['highlight'])))
-                editor.start_command = language['start_command']
-                editor.debug_command = language['debug_command']
-                editor.language = langname
+        if self.project:
+            editor.set_highlighter(Highlighter(resource_path(self.project['highlight'])))
+            editor.start_command = self.project['start_command']
+            editor.debug_command = self.project['debug_command']
+            editor.language = self.project['name']
+        else:
+            for langname, language in language_list.items():
+                if filename.rsplit('.', maxsplit=1)[-1] in language['file_formats']:
+                    editor.set_highlighter(Highlighter(resource_path(language['highlight'])))
+                    editor.start_command = language['start_command']
+                    editor.debug_command = language['debug_command']
+                    editor.language = langname
         editor.setWindowTitle(editor.filename)
         for item in self.history.allKeys():
             if self.history.value(item) == filename:
@@ -447,7 +487,7 @@ class IdeWindow(QMainWindow):
             self.editor_tabs.setCurrentIndex(self.editor_tabs.insertTab(row, editor, editor.filename))
         self.editor_tabs.setTabToolTip(self.editor_tabs.currentIndex(), editor.file)
 
-    def add_git_tab(self, path: str, row: int | None = None) -> None:
+    '''def add_git_tab(self, path: str, row: int | None = None) -> None:
         """Add new git repository tab"""
         if not isdir(path):
             return
@@ -457,7 +497,7 @@ class IdeWindow(QMainWindow):
             self.editor_tabs.setCurrentIndex(self.editor_tabs.addTab(editor, path.split('/')[-1]))
         else:
             self.editor_tabs.setCurrentIndex(self.editor_tabs.insertTab(row, editor, path.split('/')[-1]))
-        self.editor_tabs.setTabToolTip(self.editor_tabs.currentIndex(), path)
+        self.editor_tabs.setTabToolTip(self.editor_tabs.currentIndex(), path)'''
 
     def close_tab(self, tab: int) -> None:
         """Close tab"""
@@ -471,6 +511,22 @@ class IdeWindow(QMainWindow):
                     widget.save()
         widget.deleteLater()
         self.editor_tabs.removeTab(tab)
+
+    def new_project(self) -> None:
+        """Create a new project"""
+        pass
+
+    def open_project(self) -> None:
+        """Open project in the editor"""
+        pass
+
+    def save_project(self) -> None:
+        """Save project in the editor"""
+        pass
+
+    def close_project(self) -> None:
+        """Close project in the editor"""
+        pass
 
     def new_window(self, tab: int) -> None:
         """Show current tab in new window"""
@@ -561,6 +617,11 @@ class IdeWindow(QMainWindow):
         self.start_btn.setText(texts.start_btn[language])
         self.debug_btn.setText(texts.debug_btn[language])
         self.terminal_btn.setText(texts.terminal_btn[language])
+        self.proj_menu.setTitle(texts.proj_menu[language])
+        self.new_proj_btn.setText(texts.new_proj_btn[language])
+        self.open_proj_btn.setText(texts.open_proj_btn[language])
+        self.save_proj_btn.setText(texts.save_proj_btn[language])
+        self.close_proj_btn.setText(texts.close_proj_btn[language])
         self.about_menu.setTitle(texts.about_menu[language])
         self.about_btn.setText(texts.about_btn[language])
         self.feedback_btn.setText(texts.feedback_btn[language])
@@ -646,6 +707,7 @@ class IdeWindow(QMainWindow):
         """Code working process"""
         pth: str = code.path
         fnm: str = code.filename
+        print(pth, fnm)
         if code.language in language_list.keys():
             tid: str = str(threading.current_thread().native_id)
             command: str = code.start_command if not debug else code.debug_command
@@ -770,6 +832,33 @@ class IdeWindow(QMainWindow):
                     git.Repo.clone_from(git_file.text_value(), path)
         else:
             self.exit_code.setText('Git not installed')
+
+    def git_change_branch(self, branch: str) -> None:
+        """Change current branch"""
+        if GIT_INSTALLED and self.git_repo:
+            self.git_repo.head.reference = branch
+            self.git_repo.head.reset(working_tree=True)
+
+    def git_merge(self) -> None:
+        """Merge from other commits"""
+        if GIT_INSTALLED and self.git_repo:
+            self.git_repo.merge_base()
+
+    def git_commit(self) -> None:
+        """Create new commit"""
+        if GIT_INSTALLED and self.git_repo:
+            git_descr: InputDialog = InputDialog(texts.rename_btn[self.settings.value('Language')],
+                                                 texts.rename_btn[self.settings.value('Language')], self)
+            git_descr.exec()
+            if git_descr.text_value():
+                for i in self.tree.selectedIndexes():
+                    self.git_repo.index.add(self.model.filePath(i))
+                self.git_repo.index.commit(git_descr.text_value())
+
+    def git_push(self) -> None:
+        """Push commits"""
+        if GIT_INSTALLED and self.git_repo:
+            self.git_repo.remotes.origin.push()
 
     def restart(self) -> None:
         """Restart the program"""

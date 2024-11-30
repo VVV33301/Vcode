@@ -27,7 +27,7 @@ from PyQt6.QtGui import *
 from functions import resource_path
 from default import *
 
-VERSION: str = '0.7.2'
+VERSION: str = '0.8.0'
 
 style: dict[str, str] = {}
 for file in listdir(resource_path('styles')):
@@ -78,22 +78,21 @@ if not exists(USER + '/.Vcode/highlights/php.hl'):
 
 if __name__ == '__main__':
     from classes.idewindow import IdeWindow, HighlightMaker
+
     app: QApplication = QApplication(sys.argv)
     app.setWindowIcon(QIcon(resource_path('Vcode.ico')))
+
     ide: IdeWindow = IdeWindow()
-    ide.settings_window.autorun.setEnabled(False)
-    ide.settings_window.autorun.setStyleSheet('font: italic;')
+
     if ide.settings.value('Recent') == 1:
         last: QSettings = QSettings('Vcode', 'Last')
         for n in last.allKeys():
             if n != 'current' and last.value(n) is not None:
-                if n[0] == 'V':
-                    ide.add_tab(n[1:], int(last.value(n)))
-                elif n[0] == 'G':
-                    ide.add_git_tab(n[1:], int(last.value(n)))
+                ide.add_tab(n, int(last.value(n)))
             elif last.value('current') is not None:
                 ide.editor_tabs.setCurrentIndex(int(last.value('current')))
         last.clear()
+
     for arg in sys.argv[1:]:
         if isfile(arg):
             if not arg.endswith('.hl'):
@@ -102,4 +101,8 @@ if __name__ == '__main__':
                 hm: HighlightMaker = HighlightMaker(arg)
                 hm.setWindowTitle(f'{arg} - Vcode highlight maker')
                 hm.exec()
+
+    ide.settings_window.autorun.setEnabled(False)
+    ide.settings_window.autorun.setStyleSheet('font: italic;')
+
     sys.exit(app.exec())

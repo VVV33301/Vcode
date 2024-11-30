@@ -4,6 +4,8 @@ from PyQt6.QtCore import Qt, QSettings, QPoint
 import sys
 from os import system
 import texts
+from .editortab import EditorTab
+from .warning import WarningMessageBox
 
 
 class TabBarMenu(QMenu):
@@ -12,6 +14,7 @@ class TabBarMenu(QMenu):
     def __init__(self, parent: QTabWidget, ide, *args, **kwargs) -> None:
         super().__init__(parent=parent, *args, **kwargs)
         self.p: QTabWidget = parent
+        self.ide = ide
         self.selected_pos: QPoint | None = None
 
         self.close_current: QAction = QAction(self)
@@ -89,7 +92,7 @@ class TabBarMenu(QMenu):
         """Open file or directory in explorer"""
         if (x := self.p.tabBar().tabAt(self.selected_pos)) != -1 and type(self.p.widget(x)):
             pth: str = self.p.widget(x).path
-        elif type(self.p.currentWidget()) in (EditorTab, GitTab):
+        elif type(self.p.currentWidget()) is EditorTab:
             pth: str = self.p.currentWidget().path
         else:
             return
@@ -101,13 +104,13 @@ class TabBarMenu(QMenu):
     def start_pr(self) -> None:
         """Start program in tab"""
         if (x := self.p.tabBar().tabAt(self.selected_pos)) != -1:
-            ide.start_program(self.p.widget(x))
+            self.ide.start_program(self.p.widget(x))
         else:
-            ide.start_program(self.p.currentWidget())
+            self.ide.start_program(self.p.currentWidget())
 
     def debug_pr(self) -> None:
         """Debug program in tab"""
         if (x := self.p.tabBar().tabAt(self.selected_pos)) != -1:
-            ide.debug_program(self.p.widget(x))
+            self.ide.debug_program(self.p.widget(x))
         else:
-            ide.debug_program(self.p.currentWidget())
+            self.ide.debug_program(self.p.currentWidget())
