@@ -1,3 +1,5 @@
+import json
+
 from PyQt6.QtWidgets import (QApplication, QWidget, QMainWindow, QTreeView, QRadioButton, QToolBar, QLabel, QSizePolicy,
                              QMenu, QSplitter, QFileDialog)
 from PyQt6.QtGui import (QFileSystemModel, QAction, QKeySequence, QFont, QFontDatabase, QTextCursor, QDragEnterEvent,
@@ -8,7 +10,7 @@ import subprocess
 from webbrowser import open as openweb
 from requests import get
 from os import remove, system
-from os.path import isdir, isfile
+from os.path import isdir, isfile, exists
 import texts
 from functions import *
 from .aboutdialog import AboutDialog
@@ -28,6 +30,7 @@ from .treeview import TreeViewMenu
 from .warning import WarningMessageBox
 from default import USER, LANGUAGES
 from ide import VERSION, style, language_list
+import extensions
 
 
 class IdeWindow(QMainWindow):
@@ -37,11 +40,13 @@ class IdeWindow(QMainWindow):
         super().__init__()
         self.setWindowTitle('Vcode')
         self.setMinimumSize(300, 100)
+        self.resize(1000, 700)
         self.setAcceptDrops(True)
 
         self.settings: QSettings = QSettings('Vcode', 'Settings')
         self.options: QSettings = QSettings('Vcode', 'Options')
         self.history: QSettings = QSettings('Vcode', 'History')
+        self.extensions: QSettings = QSettings('Vcode', 'Extensions')
 
         self.settings_window: SettingsDialog = SettingsDialog(self)
         if 'System' in style.keys():
@@ -312,7 +317,6 @@ class IdeWindow(QMainWindow):
         if self.settings.value('Tab size') is None:
             self.settings.setValue('Tab size', 4)
 
-        self.select_language(self.settings.value('Language'))
         self.select_style(self.settings.value('Style'))
 
         if not self.options.allKeys():
@@ -358,6 +362,13 @@ class IdeWindow(QMainWindow):
         self.project: dict[str, str] | None = None
         self.git_repo: git.Repo | None = None
 
+        for ext in extensions.mains.keys():
+            if self.extensions.value(ext, None) is None:
+                self.extensions.setValue(ext, 1)
+            if self.extensions.value(ext):
+                extensions.mains[ext](ide=self)
+
+        self.select_language(self.settings.value('Language'))
         self.show_ide()
         self.check_updates(show_else=False)
 
@@ -401,7 +412,7 @@ class IdeWindow(QMainWindow):
         act_true.triggered.connect(show_update_message)
         act_false: QAction = QAction()
         act_false.triggered.connect(show_else_message)
-        threading.Thread(target=check).start()
+        threading.Thread(target=check, daemon=True).start()
 
     def show_monitor(self) -> None:
         """Run system monitor"""
@@ -410,7 +421,8 @@ class IdeWindow(QMainWindow):
     def sel_tab(self) -> None:
         """Change current tab"""
         if self.editor_tabs.count():
-            self.setWindowTitle(self.editor_tabs.currentWidget().windowTitle() + ' - Vcode')
+            self.setWindowTitle(self.editor_tabs.currentWidget().windowTitle() +
+                                (' - ' + self.project['name'] if self.project else '') + ' - Vcode')
             if type(self.editor_tabs.currentWidget()) == EditorTab:
                 d: list[str] = self.editor_tabs.currentWidget().file.split('/')
                 for _ in range(len(d)):
@@ -428,7 +440,7 @@ class IdeWindow(QMainWindow):
                 self.selection_code.setText('')
                 self.edit_menu.setEnabled(False)
         else:
-            self.setWindowTitle('Vcode')
+            self.setWindowTitle(self.project['name'] + ' - ' if self.project else '' + 'Vcode')
             self.position_code.setText('')
             self.selection_code.setText('')
             self.edit_menu.setEnabled(False)
@@ -463,10 +475,11 @@ class IdeWindow(QMainWindow):
         editor.setFocus()
         editor.cursorPositionChanged.connect(editor.highlight_current_line)
         if self.project:
-            editor.set_highlighter(Highlighter(resource_path(self.project['highlight'])))
+            if self.project['highlight']:
+                editor.set_highlighter(Highlighter(resource_path(self.project['highlight'])))
             editor.start_command = self.project['start_command']
             editor.debug_command = self.project['debug_command']
-            editor.language = self.project['name']
+            editor.language = self.project['language']
         else:
             for langname, language in language_list.items():
                 if filename.rsplit('.', maxsplit=1)[-1] in language['file_formats']:
@@ -487,18 +500,6 @@ class IdeWindow(QMainWindow):
             self.editor_tabs.setCurrentIndex(self.editor_tabs.insertTab(row, editor, editor.filename))
         self.editor_tabs.setTabToolTip(self.editor_tabs.currentIndex(), editor.file)
 
-    '''def add_git_tab(self, path: str, row: int | None = None) -> None:
-        """Add new git repository tab"""
-        if not isdir(path):
-            return
-        editor: GitTab = GitTab(path, self.exit_code, self)
-        editor.setWindowTitle('Git: ' + editor.path.rsplit('/', maxsplit=1)[-1])
-        if row is None:
-            self.editor_tabs.setCurrentIndex(self.editor_tabs.addTab(editor, path.split('/')[-1]))
-        else:
-            self.editor_tabs.setCurrentIndex(self.editor_tabs.insertTab(row, editor, path.split('/')[-1]))
-        self.editor_tabs.setTabToolTip(self.editor_tabs.currentIndex(), path)'''
-
     def close_tab(self, tab: int) -> None:
         """Close tab"""
         widget: EditorTab | GitTab = self.editor_tabs.widget(tab)
@@ -512,17 +513,31 @@ class IdeWindow(QMainWindow):
         widget.deleteLater()
         self.editor_tabs.removeTab(tab)
 
-    def new_project(self) -> None:
+    def new_project(self, dirpath: str | None = None) -> None:
         """Create a new project"""
-        pass
+        if dirpath is None:
+            dirpath: str = QFileDialog.getExistingDirectory(directory=self.options.value('Folder')).replace('\\', '/')
+        self.project = {"name": dirpath.split('/')[-1], "path": dirpath, "highlight": "", "start_command": "",
+                       "debug_command": "", "language": "", "git": False}
+        with open(dirpath + '/.vcodeproject', 'w') as vcodeproject:
+            json.dump(self.project, vcodeproject)
 
     def open_project(self) -> None:
         """Open project in the editor"""
-        pass
+        proj: str = QFileDialog.getExistingDirectory(directory=self.options.value('Folder')).replace('\\', '/')
+        if proj and isdir(proj):
+            self.options.setValue('Folder', proj)
+            if not exists(proj + '/.vcodeproject'):
+                self.new_project(proj)
+            with open(proj + '/.vcodeproject') as vcodeproject:
+                self.project = json.load(vcodeproject)
+            self.tree.setRootIndex(self.model.index(proj))
+            self.sel_tab()
 
     def save_project(self) -> None:
         """Save project in the editor"""
-        pass
+        for edt in self.editor_tabs.findChildren(EditorTab):
+            edt.save()
 
     def close_project(self) -> None:
         """Close project in the editor"""
@@ -647,6 +662,10 @@ class IdeWindow(QMainWindow):
         self.settings_window.style_select_group.setTitle(texts.style_select_group[language])
         self.settings_window.font_select_group.setTitle(texts.font_select_group[language])
 
+        for obj in self.__dict__.values():
+            if hasattr(obj, 'select_language'):
+                obj.select_language(language)
+
     def select_style(self, style_name: str) -> None:
         """Set style to windows"""
         if style_name in style.keys():
@@ -667,8 +686,13 @@ class IdeWindow(QMainWindow):
 
     def start_terminal(self) -> None:
         """Open terminal window"""
+        file_ed = self.editor_tabs.currentWidget()
+        if file_ed is None or type(file_ed) is not EditorTab:
+            folder = USER
+        else:
+            folder = file_ed.path
         if sys.platform == 'win32':
-            system('start "Vcode terminal" powershell')
+            system(f'cd {folder} && start "Vcode terminal" powershell')
         elif sys.platform.startswith('linux'):
             system('bash')
         else:
@@ -860,6 +884,9 @@ class IdeWindow(QMainWindow):
         if GIT_INSTALLED and self.git_repo:
             self.git_repo.remotes.origin.push()
 
+    def extension_enable(self) -> None:
+        pass
+
     def restart(self) -> None:
         """Restart the program"""
         self.close()
@@ -867,10 +894,7 @@ class IdeWindow(QMainWindow):
         last: QSettings = QSettings('Vcode', 'Last')
         for n in last.allKeys():
             if n != 'current' and last.value(n) is not None:
-                if n[0] == 'V':
-                    self.add_tab(n[1:], int(last.value(n)))
-                elif n[0] == 'G':
-                    self.add_git_tab(n[1:], int(last.value(n)))
+                self.add_tab(n, int(last.value(n)))
             elif last.value('current') is not None:
                 self.editor_tabs.setCurrentIndex(int(last.value('current')))
         last.clear()
@@ -907,9 +931,7 @@ class IdeWindow(QMainWindow):
         for tab in filter(lambda w: type(w) is EditorTab, QApplication.instance().allWidgets()):
             if self.editor_tabs.indexOf(tab) == -1:
                 tab.close()
-            save_last.setValue('V' + tab.file, self.editor_tabs.indexOf(tab))
-        for tab in self.editor_tabs.findChildren(GitTab):
-            save_last.setValue('G' + tab.path, self.editor_tabs.indexOf(tab))
+            save_last.setValue(tab.file, self.editor_tabs.indexOf(tab))
         save_last.setValue('current', self.editor_tabs.currentIndex())
         self.options.setValue('Splitter', self.splitter.sizes())
         if self.isMaximized():
