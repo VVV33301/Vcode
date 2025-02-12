@@ -537,8 +537,8 @@ class IdeWindow(QMainWindow):
             dirpath: str = QFileDialog.getExistingDirectory(directory=self.options.value('Folder')).replace('\\', '/')
             if not dirpath:
                 return
-        self.project = {"name": dirpath.split('/')[-1], "path": dirpath, "highlight": "", "start_command": "",
-                       "debug_command": "", "language": "", "git": False}
+        self.project = {"path": dirpath, "name": dirpath.split('/')[-1], "highlight": "", "start_command": "",
+                        "debug_command": "", "git": False}
         with open(dirpath + '/.vcodeproject', 'w') as vcodeproject:
             json.dump(self.project, vcodeproject)
         self.open_project(dirpath)
@@ -763,54 +763,43 @@ class IdeWindow(QMainWindow):
         """Code working process"""
         pth: str = code.path
         fnm: str = code.filename
-        if code.language in language_list.keys():
+        if self.project:
+            tid: str = str(threading.current_thread().native_id)
+            command: str = self.project['start_command'] if not debug else self.project['debug_command']
+        elif code.language in language_list.keys():
             tid: str = str(threading.current_thread().native_id)
             command: str = code.start_command if not debug else code.debug_command
-            if sys.platform == 'win32':
-                with open(f'{USER}/.Vcode/process_{tid}.bat', 'w', encoding='utf-8') as bat_win32:
-                    bat_win32.write(f'''
-                              @echo off
-                              chcp 65001>nul
-                              cd {pth}
-                              echo Interrupted > {fnm}.output
-                              {command.format(filename=fnm)}
-                              echo Exit code: %errorlevel% 
-                              echo %errorlevel% > {fnm}.output
-                              pause
-                              ''')
-                process: subprocess.Popen = subprocess.Popen(f'{USER}/.Vcode/process_{tid}.bat',
-                                                             creationflags=subprocess.CREATE_NEW_CONSOLE,
-                                                             process_group=subprocess.CREATE_NEW_PROCESS_GROUP)
-                process.wait()
-                remove(f'{USER}/.Vcode/process_{tid}.bat')
-            elif sys.platform.startswith('linux'):
-                with open(f'{USER}/.Vcode/process_{tid}.sh', 'w', encoding='utf-8') as bat_linux:
-                    bat_linux.write(f'''
-                              #!/bin/bash
-                              cd {pth}
-                              echo "Interrupted" > {fnm}.output
-                              {command.format(filename=fnm)}
-                              ec=$?
-                              echo "Exit code: $ec"
-                              echo $ec > {fnm}.output
-                              read -r -p "Press enter to continue..." key
-                              ''')
-                system(f'chmod +x {resource_path(f"{USER}/.Vcode/process_{tid}.sh")}')
-                process: subprocess.Popen = subprocess.Popen(resource_path(f"{USER}/.Vcode/process_{tid}.sh"),
-                                                             shell=True)
-                process.wait()
-                remove(f'{USER}/.Vcode/process_{tid}.sh')
-            else:
-                with open(f'{pth}/{fnm}.output', 'w') as bat_w:
-                    bat_w.write('Can`t start terminal in this operating system')
-            with open(f'{pth}/{fnm}.output') as bat_output:
-                if len(x := bat_output.readlines()) == 1:
-                    self.exit_code.setText(f'Exit code: {x[0].rstrip()}')
-                else:
-                    self.exit_code.setText('Interrupted')
-            remove(f'{pth}/{fnm}.output')
         else:
             self.exit_code.setText(f'Can`t start "{fnm}"')
+            return
+        if sys.platform == 'win32':
+            with open(f'{USER}/.Vcode/process_{tid}.bat', 'w', encoding='utf-8') as bat_win32:
+                bat_win32.write(f'@echo off\nchcp 65001>nul\ncd {pth}\necho Interrupted > {fnm}.output\n'
+                                f'{command.format(filename=fnm)}\necho Exit code: %errorlevel%\n'
+                                f'echo %errorlevel% > {fnm}.output\npause')
+            process: subprocess.Popen = subprocess.Popen(f'{USER}/.Vcode/process_{tid}.bat',
+                                                         creationflags=subprocess.CREATE_NEW_CONSOLE,
+                                                         process_group=subprocess.CREATE_NEW_PROCESS_GROUP)
+            process.wait()
+            remove(f'{USER}/.Vcode/process_{tid}.bat')
+        elif sys.platform.startswith('linux'):
+            with open(f'{USER}/.Vcode/process_{tid}.sh', 'w', encoding='utf-8') as bat_linux:
+                bat_linux.write(f'#!/bin/bash\ncd {pth}\necho "Interrupted" > {fnm}.output\n'
+                                f'{command.format(filename=fnm)}\nec=$?\necho "Exit code: $ec"\n'
+                                f'echo $ec > {fnm}.output\nread -r -p "Press enter to continue..." key')
+            system(f'chmod +x {resource_path(f"{USER}/.Vcode/process_{tid}.sh")}')
+            process: subprocess.Popen = subprocess.Popen(resource_path(f"{USER}/.Vcode/process_{tid}.sh"), shell=True)
+            process.wait()
+            remove(f'{USER}/.Vcode/process_{tid}.sh')
+        else:
+            with open(f'{pth}/{fnm}.output', 'w') as bat_w:
+                bat_w.write('Can`t start terminal in this operating system')
+        with open(f'{pth}/{fnm}.output') as bat_output:
+            if len(x := bat_output.readlines()) == 1:
+                self.exit_code.setText(f'Exit code: {x[0].rstrip()}')
+            else:
+                self.exit_code.setText('Interrupted')
+        remove(f'{pth}/{fnm}.output')
 
     def save_file(self) -> None:
         """Save text to file"""
