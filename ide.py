@@ -27,7 +27,7 @@ from PyQt6.QtGui import *
 from functions import resource_path
 from default import *
 
-VERSION: str = '0.8.0'
+VERSION: str = '1.0.0'
 
 style: dict[str, str] = {}
 for file in listdir(resource_path('styles')):
@@ -60,6 +60,8 @@ else:
         mkdir(USER + '/.Vcode/')
     with open(USER + '/.Vcode/languages.json', 'w') as llf:
         json.dump(language_list, llf)
+if not exists(USER + '/.Vcode/extensions/'):
+    mkdir(USER + '/.Vcode/extensions/')
 if not exists(USER + '/.Vcode/highlights/'):
     mkdir(USER + '/.Vcode/highlights/')
 if not exists(USER + '/.Vcode/highlights/python.hl'):

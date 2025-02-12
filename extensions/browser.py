@@ -119,5 +119,5 @@ class Browser(QMainWindow):
 
 
 def main(ide):
-    ide.browser = Browser(ide)
-    ide.splitter.addWidget(ide.browser)
+    browser = Browser(ide)
+    ide.extensions.addTab(browser, 'Browser')

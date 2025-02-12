@@ -67,6 +67,10 @@ close_all_btn = {'en': 'Close all tabs', 'ru': 'Закрыть все вклад
                  'hi': 'सभी टैब को बंद करें'}
 new_window_btn = {'en': 'Open in new window', 'ru': 'Открыть в новом окне', 'de': 'In einem neuen Fenster öffnen',
                   'ch': '在新窗口中打开', 'hi': 'नई विंडो में खोलें'}
+extensions_btn = {'en': 'Extensions', 'ru': 'Расширения', 'de': 'Erweiterungen',
+                  'ch': '扩展', 'hi': 'एक्सटेंशन'}
+import_btn = {'en': 'Import extension', 'ru': 'Импортировать расширение', 'de': 'Erweiterung importieren',
+                  'ch': '导入扩展', 'hi': 'एक्सटेंशन आयात करें'}
 
 autorun = {'en': 'Autorun', 'ru': 'Автозагрузка', 'de': 'Automatisch laden', 'ch': '自动加载', 'hi': 'ऑटोरन'}
 autosave = {'en': 'Autosave', 'ru': 'Автосохранение', 'de': 'Automatisches Speichern', 'ch': '自动保存',

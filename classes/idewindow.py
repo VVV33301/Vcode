@@ -1,7 +1,7 @@
 import json
 
 from PyQt6.QtWidgets import (QApplication, QWidget, QMainWindow, QTreeView, QRadioButton, QToolBar, QLabel, QSizePolicy,
-                             QMenu, QSplitter, QFileDialog)
+                             QMenu, QSplitter, QFileDialog, QTabWidget, QListWidget, QListWidgetItem)
 from PyQt6.QtGui import (QFileSystemModel, QAction, QKeySequence, QFont, QFontDatabase, QTextCursor, QDragEnterEvent,
                          QDropEvent, QCloseEvent)
 from PyQt6.QtCore import Qt, QSettings, QDir, QItemSelectionModel, QMimeData
@@ -15,6 +15,7 @@ import texts
 from functions import *
 from .aboutdialog import AboutDialog
 from .editortab import EditorTab
+from .extensionssettings import ExtensionsSettings
 from .findwindow import FindWindow
 from .gittab import GitTab, git, GIT_INSTALLED
 from .highlighter import Highlighter
@@ -46,7 +47,7 @@ class IdeWindow(QMainWindow):
         self.settings: QSettings = QSettings('Vcode', 'Settings')
         self.options: QSettings = QSettings('Vcode', 'Options')
         self.history: QSettings = QSettings('Vcode', 'History')
-        self.extensions: QSettings = QSettings('Vcode', 'Extensions')
+        self.ext_list: QSettings = QSettings('Vcode', 'Extensions')
 
         self.settings_window: SettingsDialog = SettingsDialog(self)
         if 'System' in style.keys():
@@ -82,10 +83,18 @@ class IdeWindow(QMainWindow):
         self.tree.doubleClicked.connect(lambda x: self.add_tab(self.model.filePath(x)))
         self.tree.contextMenuEvent = TreeViewMenu(self.tree, self)
 
+        self.extensions: QTabWidget = QTabWidget(self)
+        self.extensions.setTabPosition(QTabWidget.TabPosition.East)
+        self.extensions.setMovable(True)
+
         self.splitter: QSplitter = QSplitter()
         self.splitter.addWidget(self.tree)
         self.splitter.addWidget(self.editor_tabs)
+        self.splitter.addWidget(self.extensions)
         self.setCentralWidget(self.splitter)
+
+        self.ext_enabled: ExtensionsSettings = ExtensionsSettings(self)
+        self.ext_enabled.list.itemClicked.connect(self.extension_enable)
 
         self.tool_bar: QToolBar = QToolBar(self)
         self.tool_bar.setMovable(False)
@@ -222,6 +231,11 @@ class IdeWindow(QMainWindow):
         self.presentation_btn.setShortcuts(['Ctrl+F11', 'F11'])
         self.presentation_btn.triggered.connect(self.presentation_mode)
         self.view_menu.addAction(self.presentation_btn)
+
+        self.ext_list_btn: QAction = QAction(self)
+        self.ext_list_btn.setShortcut('Ctrl+Shift+X')
+        self.ext_list_btn.triggered.connect(self.ext_enabled.exec)
+        self.view_menu.addAction(self.ext_list_btn)
 
         self.settings_btn: QAction = QAction(self)
         self.settings_btn.triggered.connect(self.settings_window.exec)
@@ -363,10 +377,14 @@ class IdeWindow(QMainWindow):
         self.git_repo: git.Repo | None = None
 
         for ext in extensions.mains.keys():
-            if self.extensions.value(ext, None) is None:
-                self.extensions.setValue(ext, 1)
-            if self.extensions.value(ext):
+            if self.ext_list.value(ext, None) is None:
+                self.ext_list.setValue(ext, 1)
+            if self.ext_list.value(ext):
                 extensions.mains[ext](ide=self)
+            ei: QListWidgetItem = QListWidgetItem(self.ext_enabled.list)
+            ei.setText(ext)
+            ei.setFlags(ei.flags() | Qt.ItemFlag.ItemIsUserCheckable)
+            ei.setCheckState(Qt.CheckState.Checked if self.ext_list.value(ext) else Qt.CheckState.Unchecked)
 
         self.select_language(self.settings.value('Language'))
         self.show_ide()
@@ -517,20 +535,27 @@ class IdeWindow(QMainWindow):
         """Create a new project"""
         if dirpath is None:
             dirpath: str = QFileDialog.getExistingDirectory(directory=self.options.value('Folder')).replace('\\', '/')
+            if not dirpath:
+                return
         self.project = {"name": dirpath.split('/')[-1], "path": dirpath, "highlight": "", "start_command": "",
                        "debug_command": "", "language": "", "git": False}
         with open(dirpath + '/.vcodeproject', 'w') as vcodeproject:
             json.dump(self.project, vcodeproject)
+        self.open_project(dirpath)
 
-    def open_project(self) -> None:
+    def open_project(self, proj: str | None = None) -> None:
         """Open project in the editor"""
-        proj: str = QFileDialog.getExistingDirectory(directory=self.options.value('Folder')).replace('\\', '/')
+        if proj is None:
+            proj: str = QFileDialog.getExistingDirectory(directory=self.options.value('Folder')).replace('\\', '/')
         if proj and isdir(proj):
             self.options.setValue('Folder', proj)
             if not exists(proj + '/.vcodeproject'):
                 self.new_project(proj)
+                return
             with open(proj + '/.vcodeproject') as vcodeproject:
                 self.project = json.load(vcodeproject)
+            if self.project['git']:
+                self.git_repo = self.project['git']
             self.tree.setRootIndex(self.model.index(proj))
             self.sel_tab()
 
@@ -541,7 +566,10 @@ class IdeWindow(QMainWindow):
 
     def close_project(self) -> None:
         """Close project in the editor"""
-        pass
+        self.project = None
+        self.git_repo = None
+        self.tree.setRootIndex(self.model.index(''))
+        self.sel_tab()
 
     def new_window(self, tab: int) -> None:
         """Show current tab in new window"""
@@ -645,6 +673,7 @@ class IdeWindow(QMainWindow):
         self.view_menu.setTitle(texts.view_btn[language])
         self.monitor_btn.setText(texts.monitor_btn[language])
         self.presentation_btn.setText(texts.presentation_btn[language])
+        self.ext_list_btn.setText(texts.extensions_btn[language])
         self.edit_menu.setTitle(texts.edit_btn[language])
         self.undo.setText(texts.undo[language])
         self.redo.setText(texts.redo[language])
@@ -654,6 +683,9 @@ class IdeWindow(QMainWindow):
         self.select_all.setText(texts.select_all[language])
         self.find_btn.setText(texts.find_btn[language])
 
+        self.ext_enabled.setWindowTitle(texts.extensions_btn[language])
+        self.ext_enabled.import_btn.setText(texts.import_btn[language])
+
         self.settings_window.autorun.setText(texts.autorun[language])
         self.settings_window.autosave.setText(texts.autosave[language])
         self.settings_window.recent.setText(texts.recent[language])
@@ -662,9 +694,9 @@ class IdeWindow(QMainWindow):
         self.settings_window.style_select_group.setTitle(texts.style_select_group[language])
         self.settings_window.font_select_group.setTitle(texts.font_select_group[language])
 
-        for obj in self.__dict__.values():
-            if hasattr(obj, 'select_language'):
-                obj.select_language(language)
+        for obj in range(self.extensions.count()):
+            if hasattr(self.extensions.widget(obj), 'select_language'):
+                self.extensions.widget(obj).select_language(language)
 
     def select_style(self, style_name: str) -> None:
         """Set style to windows"""
@@ -731,7 +763,6 @@ class IdeWindow(QMainWindow):
         """Code working process"""
         pth: str = code.path
         fnm: str = code.filename
-        print(pth, fnm)
         if code.language in language_list.keys():
             tid: str = str(threading.current_thread().native_id)
             command: str = code.start_command if not debug else code.debug_command
@@ -828,7 +859,7 @@ class IdeWindow(QMainWindow):
             if path:
                 try:
                     if git.Repo(path).git_dir:
-                        self.add_git_tab(path)
+                        self.open_project(path)
                 except git.InvalidGitRepositoryError:
                     self.exit_code.setText(f'Not git repo {path}')
         else:
@@ -840,7 +871,7 @@ class IdeWindow(QMainWindow):
             path: str = QFileDialog.getExistingDirectory(directory=USER)
             if path:
                 git.Repo.init(path)
-                self.add_git_tab(path)
+                self.open_project(path)
                 self.exit_code.setText(f'Initialize repository {path}')
         else:
             self.exit_code.setText('Git not installed')
@@ -884,8 +915,13 @@ class IdeWindow(QMainWindow):
         if GIT_INSTALLED and self.git_repo:
             self.git_repo.remotes.origin.push()
 
-    def extension_enable(self) -> None:
-        pass
+    def extension_enable(self, item: QListWidgetItem) -> None:
+        if item.checkState() == Qt.CheckState.Unchecked and self.ext_list.value(item.text()) == 1:
+            self.ext_list.setValue(item.text(), 0)
+            self.restart()
+        elif item.checkState() == Qt.CheckState.Checked and self.ext_list.value(item.text()) == 0:
+            self.ext_list.setValue(item.text(), 1)
+            self.restart()
 
     def restart(self) -> None:
         """Restart the program"""
