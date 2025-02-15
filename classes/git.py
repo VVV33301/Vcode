@@ -24,7 +24,7 @@ class GitTab(QWidget):
             self.exit_code.setText('Git not installed')
             return
         super().__init__(parent=parent)
-        self.p: IdeWindow = parent
+        self.p: QWidget = parent
         self.path: str = path
         self.l_s: QSettings = QSettings('Vcode', 'Settings')
 

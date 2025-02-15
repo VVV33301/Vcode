@@ -17,10 +17,11 @@ from .aboutdialog import AboutDialog
 from .editortab import EditorTab
 from .extensionssettings import ExtensionsSettings
 from .findwindow import FindWindow
-from .gittab import GitTab, git, GIT_INSTALLED
+from .git import git, GIT_INSTALLED
 from .highlighter import Highlighter
 from .highlightmaker import HighlightMaker
 from .inputdialog import InputDialog
+from .projectsettingsdialog import ProjectSettingsDialog
 from .settingsdialog import SettingsDialog
 from .systemmonitor import SystemMonitor
 from .tabwidget import TabWidget
@@ -29,7 +30,7 @@ from .texteditfullscreen import TextEditFullscreenMenu
 from .texteditwindow import TextEditWindowMenu
 from .treeview import TreeViewMenu
 from .warning import WarningMessageBox
-from default import USER, LANGUAGES
+from default import USER, CONFIG_PATH, LANGUAGES
 from ide import VERSION, style, language_list
 import extensions
 
@@ -40,7 +41,7 @@ class IdeWindow(QMainWindow):
     def __init__(self) -> None:
         super().__init__()
         self.setWindowTitle('Vcode')
-        self.setMinimumSize(300, 100)
+        self.setMinimumSize(300, 200)
         self.resize(1000, 700)
         self.setAcceptDrops(True)
 
@@ -86,11 +87,14 @@ class IdeWindow(QMainWindow):
         self.extensions: QTabWidget = QTabWidget(self)
         self.extensions.setTabPosition(QTabWidget.TabPosition.East)
         self.extensions.setMovable(True)
+        self.extensions.setMinimumWidth(20)
 
         self.splitter: QSplitter = QSplitter()
         self.splitter.addWidget(self.tree)
         self.splitter.addWidget(self.editor_tabs)
         self.splitter.addWidget(self.extensions)
+        self.splitter.setCollapsible(1, False)
+        self.splitter.setCollapsible(2, False)
         self.setCentralWidget(self.splitter)
 
         self.ext_enabled: ExtensionsSettings = ExtensionsSettings(self)
@@ -260,6 +264,12 @@ class IdeWindow(QMainWindow):
         self.close_proj_btn.triggered.connect(self.close_project)
         self.proj_menu.addAction(self.close_proj_btn)
 
+        self.proj_menu.addSeparator()
+
+        self.settings_proj_btn: QAction = QAction(self)
+        self.settings_proj_btn.triggered.connect(self.project_settings)
+        self.proj_menu.addAction(self.settings_proj_btn)
+
         self.git_menu: QMenu = QMenu('Git', self)
         self.menuBar().addMenu(self.git_menu)
 
@@ -274,6 +284,10 @@ class IdeWindow(QMainWindow):
         self.git_clone_btn: QAction = QAction('Clone', self)
         self.git_clone_btn.triggered.connect(self.git_clone)
         self.git_menu.addAction(self.git_clone_btn)
+
+        self.branch: QAction = QAction('Branch', self)
+        self.branch.triggered.connect(self.git_change_branch)
+        self.git_menu.addAction(self.branch)
 
         self.commit: QAction = QAction('Commit', self)
         self.commit.triggered.connect(self.git_commit)
@@ -334,7 +348,7 @@ class IdeWindow(QMainWindow):
         self.select_style(self.settings.value('Style'))
 
         if not self.options.allKeys():
-            self.options.setValue('Splitter', [225, 775])
+            self.options.setValue('Splitter', [215, 775, 10])
             self.options.setValue('Folder', USER)
             self.options.setValue('Geometry', 'Not init')
         self.splitter.setSizes(map(int, self.options.value('Splitter')))
@@ -458,7 +472,7 @@ class IdeWindow(QMainWindow):
                 self.selection_code.setText('')
                 self.edit_menu.setEnabled(False)
         else:
-            self.setWindowTitle(self.project['name'] + ' - ' if self.project else '' + 'Vcode')
+            self.setWindowTitle(((self.project['name'] + ' - ') if self.project else '') + 'Vcode')
             self.position_code.setText('')
             self.selection_code.setText('')
             self.edit_menu.setEnabled(False)
@@ -467,15 +481,21 @@ class IdeWindow(QMainWindow):
         """Add new text tab"""
         if not isfile(filename):
             return
+        filename = filename.replace('\\', '/')
         for tab in self.editor_tabs.findChildren(EditorTab):
             if tab.file == filename:
                 self.editor_tabs.setCurrentWidget(tab)
                 return
-        filename = filename.replace('\\', '/')
         if filename.endswith('.hl'):
             hmt: HighlightMaker = HighlightMaker(filename)
             hmt.setWindowTitle(f'{filename.split("/")[-1]} - Vcode highlight maker')
             hmt.exec()
+            return
+        if filename.endswith('.vcodeproject'):
+            if self.project is None:
+                self.open_project(filename.replace('/.vcodeproject', ''))
+            vprs: ProjectSettingsDialog = ProjectSettingsDialog(self.project, self)
+            vprs.exec()
             return
         editor: EditorTab = EditorTab(filename, self)
         editor.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
@@ -497,7 +517,6 @@ class IdeWindow(QMainWindow):
                 editor.set_highlighter(Highlighter(resource_path(self.project['highlight'])))
             editor.start_command = self.project['start_command']
             editor.debug_command = self.project['debug_command']
-            editor.language = self.project['language']
         else:
             for langname, language in language_list.items():
                 if filename.rsplit('.', maxsplit=1)[-1] in language['file_formats']:
@@ -520,7 +539,7 @@ class IdeWindow(QMainWindow):
 
     def close_tab(self, tab: int) -> None:
         """Close tab"""
-        widget: EditorTab | GitTab = self.editor_tabs.widget(tab)
+        widget: EditorTab = self.editor_tabs.widget(tab)
         if type(widget) is EditorTab:
             if widget.saved_text != widget.toPlainText():
                 button_text: str = WarningMessageBox(self, 'Warning', texts.save_warning, WarningMessageBox.SAVE).wait()
@@ -531,14 +550,21 @@ class IdeWindow(QMainWindow):
         widget.deleteLater()
         self.editor_tabs.removeTab(tab)
 
-    def new_project(self, dirpath: str | None = None) -> None:
+    def close_all_tabs(self) -> None:
+        """Close all tabs"""
+        for tab in range(self.editor_tabs.count()):
+            self.close_tab(0)
+
+    def new_project(self, *, dirpath: str | None = None) -> None:
         """Create a new project"""
         if dirpath is None:
             dirpath: str = QFileDialog.getExistingDirectory(directory=self.options.value('Folder')).replace('\\', '/')
             if not dirpath:
                 return
         self.project = {"path": dirpath, "name": dirpath.split('/')[-1], "highlight": "", "start_command": "",
-                        "debug_command": "", "git": False}
+                        "debug_command": "", "git": 'false'}
+        if GIT_INSTALLED and git.Repo(dirpath).git_dir:
+            self.project['git'] = 'true'
         with open(dirpath + '/.vcodeproject', 'w') as vcodeproject:
             json.dump(self.project, vcodeproject)
         self.open_project(dirpath)
@@ -550,13 +576,14 @@ class IdeWindow(QMainWindow):
         if proj and isdir(proj):
             self.options.setValue('Folder', proj)
             if not exists(proj + '/.vcodeproject'):
-                self.new_project(proj)
+                self.new_project(dirpath=proj)
                 return
             with open(proj + '/.vcodeproject') as vcodeproject:
                 self.project = json.load(vcodeproject)
-            if self.project['git']:
-                self.git_repo = self.project['git']
+            if self.project['git'] == 'true':
+                self.git_repo = git.Repo(proj)
             self.tree.setRootIndex(self.model.index(proj))
+            self.close_all_tabs()
             self.sel_tab()
 
     def save_project(self) -> None:
@@ -569,26 +596,27 @@ class IdeWindow(QMainWindow):
         self.project = None
         self.git_repo = None
         self.tree.setRootIndex(self.model.index(''))
+        self.close_all_tabs()
         self.sel_tab()
+
+    def project_settings(self) -> None:
+        if self.project:
+            prs: ProjectSettingsDialog = ProjectSettingsDialog(self.project, self)
+            prs.exec()
 
     def new_window(self, tab: int) -> None:
         """Show current tab in new window"""
-        t: EditorTab | GitTab | QWidget = self.editor_tabs.widget(tab)
+        t: EditorTab | QWidget = self.editor_tabs.widget(tab)
         if type(t) is EditorTab:
             self.editor_tabs.removeTab(tab)
             t.contextMenuEvent = TextEditWindowMenu(t, self)
             t.closeEvent = lambda e, x=t: self.close_window(e, x)
             t.setParent(None, Qt.WindowType.Window)
             t.show()
-        elif type(t) is GitTab:
-            self.editor_tabs.removeTab(tab)
-            t.closeEvent = lambda e, x=t: self.close_window(e, x)
-            t.setParent(None, Qt.WindowType.Window)
-            t.show()
 
     def presentation_mode(self) -> None:
         """Show current tab fullscreen"""
-        t: EditorTab | GitTab | QWidget = self.editor_tabs.currentWidget()
+        t: EditorTab | QWidget = self.editor_tabs.currentWidget()
         if type(t) is not EditorTab:
             return
         self.editor_tabs.removeTab(self.editor_tabs.currentIndex())
@@ -605,7 +633,7 @@ class IdeWindow(QMainWindow):
         e.ignore()
         self.close_window_mode(widget)
 
-    def close_window_mode(self, t: EditorTab | GitTab) -> None:
+    def close_window_mode(self, t: EditorTab) -> None:
         """Return windowed tab to tab widget"""
         t.showNormal()
         t.closeEvent = EditorTab.closeEvent
@@ -614,8 +642,6 @@ class IdeWindow(QMainWindow):
             t.setFont(self.settings.value('Font'))
             t.contextMenuEvent = TextEditMenu(t, self)
             self.editor_tabs.setCurrentIndex(self.editor_tabs.addTab(t, t.filename))
-        else:
-            self.editor_tabs.setCurrentIndex(self.editor_tabs.addTab(t, t.path.rsplit('/', maxsplit=1)[-1]))
         self.editor_tabs.setTabToolTip(self.editor_tabs.currentIndex(), t.path)
 
     def update_history(self) -> None:
@@ -665,6 +691,7 @@ class IdeWindow(QMainWindow):
         self.open_proj_btn.setText(texts.open_proj_btn[language])
         self.save_proj_btn.setText(texts.save_proj_btn[language])
         self.close_proj_btn.setText(texts.close_proj_btn[language])
+        self.settings_proj_btn.setText(texts.settings_btn[language])
         self.about_menu.setTitle(texts.about_menu[language])
         self.about_btn.setText(texts.about_btn[language])
         self.feedback_btn.setText(texts.feedback_btn[language])
@@ -773,24 +800,24 @@ class IdeWindow(QMainWindow):
             self.exit_code.setText(f'Can`t start "{fnm}"')
             return
         if sys.platform == 'win32':
-            with open(f'{USER}/.Vcode/process_{tid}.bat', 'w', encoding='utf-8') as bat_win32:
+            with open(f'{CONFIG_PATH}/process_{tid}.bat', 'w', encoding='utf-8') as bat_win32:
                 bat_win32.write(f'@echo off\nchcp 65001>nul\ncd {pth}\necho Interrupted > {fnm}.output\n'
                                 f'{command.format(filename=fnm)}\necho Exit code: %errorlevel%\n'
                                 f'echo %errorlevel% > {fnm}.output\npause')
-            process: subprocess.Popen = subprocess.Popen(f'{USER}/.Vcode/process_{tid}.bat',
+            process: subprocess.Popen = subprocess.Popen(f'{CONFIG_PATH}/process_{tid}.bat',
                                                          creationflags=subprocess.CREATE_NEW_CONSOLE,
                                                          process_group=subprocess.CREATE_NEW_PROCESS_GROUP)
             process.wait()
-            remove(f'{USER}/.Vcode/process_{tid}.bat')
+            remove(f'{CONFIG_PATH}/process_{tid}.bat')
         elif sys.platform.startswith('linux'):
-            with open(f'{USER}/.Vcode/process_{tid}.sh', 'w', encoding='utf-8') as bat_linux:
+            with open(f'{CONFIG_PATH}/process_{tid}.sh', 'w', encoding='utf-8') as bat_linux:
                 bat_linux.write(f'#!/bin/bash\ncd {pth}\necho "Interrupted" > {fnm}.output\n'
                                 f'{command.format(filename=fnm)}\nec=$?\necho "Exit code: $ec"\n'
                                 f'echo $ec > {fnm}.output\nread -r -p "Press enter to continue..." key')
-            system(f'chmod +x {resource_path(f"{USER}/.Vcode/process_{tid}.sh")}')
-            process: subprocess.Popen = subprocess.Popen(resource_path(f"{USER}/.Vcode/process_{tid}.sh"), shell=True)
+            system(f'chmod +x {resource_path(f"{CONFIG_PATH}/process_{tid}.sh")}')
+            process: subprocess.Popen = subprocess.Popen(resource_path(f"{CONFIG_PATH}/process_{tid}.sh"), shell=True)
             process.wait()
-            remove(f'{USER}/.Vcode/process_{tid}.sh')
+            remove(f'{CONFIG_PATH}/process_{tid}.sh')
         else:
             with open(f'{pth}/{fnm}.output', 'w') as bat_w:
                 bat_w.write('Can`t start terminal in this operating system')
@@ -877,11 +904,14 @@ class IdeWindow(QMainWindow):
         else:
             self.exit_code.setText('Git not installed')
 
-    def git_change_branch(self, branch: str) -> None:
+    def git_change_branch(self) -> None:
         """Change current branch"""
         if GIT_INSTALLED and self.git_repo:
-            self.git_repo.head.reference = branch
-            self.git_repo.head.reset(working_tree=True)
+            branch: InputDialog = InputDialog('Branch', 'Branch', self)
+            branch.exec()
+            if branch.text_value():
+                self.git_repo.head.set_reference(branch.text_value())
+                self.git_repo.head.reset(working_tree=True)
 
     def git_merge(self) -> None:
         """Merge from other commits"""
@@ -891,8 +921,7 @@ class IdeWindow(QMainWindow):
     def git_commit(self) -> None:
         """Create new commit"""
         if GIT_INSTALLED and self.git_repo:
-            git_descr: InputDialog = InputDialog(texts.rename_btn[self.settings.value('Language')],
-                                                 texts.rename_btn[self.settings.value('Language')], self)
+            git_descr: InputDialog = InputDialog('Commit', 'Commit description', self)
             git_descr.exec()
             if git_descr.text_value():
                 for i in self.tree.selectedIndexes():
@@ -917,8 +946,10 @@ class IdeWindow(QMainWindow):
         self.close()
         self.__init__()
         last: QSettings = QSettings('Vcode', 'Last')
+        if last.value('project'):
+            self.open_project(last.value('project'))
         for n in last.allKeys():
-            if n != 'current' and last.value(n) is not None:
+            if n not in ('current', 'project') and last.value(n) is not None:
                 self.add_tab(n, int(last.value(n)))
             elif last.value('current') is not None:
                 self.editor_tabs.setCurrentIndex(int(last.value('current')))
@@ -958,6 +989,8 @@ class IdeWindow(QMainWindow):
                 tab.close()
             save_last.setValue(tab.file, self.editor_tabs.indexOf(tab))
         save_last.setValue('current', self.editor_tabs.currentIndex())
+        if self.project:
+            save_last.setValue('project', self.project['path'])
         self.options.setValue('Splitter', self.splitter.sizes())
         if self.isMaximized():
             self.options.setValue('Geometry', 'Maximized')

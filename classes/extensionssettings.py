@@ -1,8 +1,8 @@
 from PyQt6.QtWidgets import QWidget, QListWidget, QDialog, QVBoxLayout, QPushButton, QFileDialog
-from os.path import isfile, join
+from os.path import isfile
 from shutil import copy2
 from functions import resource_path
-from default import USER
+from default import CONFIG_PATH
 
 
 class ExtensionsSettings(QDialog):
@@ -22,5 +22,5 @@ class ExtensionsSettings(QDialog):
     def import_ext(self):
         proj: str = QFileDialog.getOpenFileName(directory='/', filter='Extensions Files (*.py)')[0].replace('\\', '/')
         if proj and isfile(proj) and proj.endswith('.py'):
-            copy2(proj, resource_path(USER + '/.Vcode/extensions'))
+            copy2(proj, resource_path(CONFIG_PATH + '/extensions'))
             self.parent.restart()

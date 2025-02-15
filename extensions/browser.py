@@ -31,6 +31,7 @@ class Browser(QMainWindow):
         super().__init__(parent=parent)
         self.parent = parent
         self.setStyleSheet('QPushButton {width: 20px}')
+        self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
 
         self.web = QWebEngineView(self)
         self.page = WebEnginePage(self)

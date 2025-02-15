@@ -1,7 +1,7 @@
 from PyQt6.QtWidgets import QDialog, QGridLayout, QComboBox, QLineEdit, QPushButton, QFileDialog, QMainWindow
 from PyQt6.QtCore import QSettings
 import json
-from default import USER
+from default import USER, CONFIG_PATH
 import texts
 from .lineedit import LineEditMenu
 from .highlightmaker import HighlightMaker
@@ -73,7 +73,7 @@ class LanguageSettingsDialog(QDialog):
 
     def find_highlight_file(self):
         """Search highlight file in all files"""
-        a, _ = QFileDialog.getOpenFileName(self, directory=USER, filter='Highlight files (*.hl)')
+        a, _ = QFileDialog.getOpenFileName(self, directory=CONFIG_PATH + '/highlights', filter='Highlight files (*.hl)')
         if a:
             self.highlight.setText(a)
 
@@ -90,15 +90,15 @@ class LanguageSettingsDialog(QDialog):
         a, _ = QFileDialog.getOpenFileName(
             self, directory=USER, filter='Executable files (*.exe);;Shell files (*.sh *.bat *.vbs);;All files (*.*)')
         if a:
-            self.start_command.insertItem(0, f'"{a}" "{{filename}}"')
-            self.start_command.setCurrentIndex(0)
+            self.debug_command.insertItem(0, f'"{a}" "{{filename}}"')
+            self.debug_command.setCurrentIndex(0)
 
     def highlight_maker_call(self) -> None:
         """Start highlight maker"""
         if not language_list[self.language]['highlight']:
-            with open(USER + './Vcode/highlights/' + self.language.lower() + '.hl', 'w') as hn:
+            with open(CONFIG_PATH + '/highlights/' + self.language.lower() + '.hl', 'w') as hn:
                 hn.write('[A-Za-z0-9]+ = {"foreground": [127, 127, 127]};')
-            language_list[self.language]['highlight'] = USER + './Vcode/highlights/' + self.language.lower() + '.hl'
+            language_list[self.language]['highlight'] = CONFIG_PATH + '/highlights/' + self.language.lower() + '.hl'
         hlm: HighlightMaker = HighlightMaker(language_list[self.language]['highlight'], self)
         hlm.setWindowTitle(f'{language_list[self.language]["highlight"].split("/")[-1]} - Vcode highlight maker')
         hlm.exec()
@@ -111,7 +111,7 @@ class LanguageSettingsDialog(QDialog):
                                              'debug_command': self.debug_command.currentText()}
         if new_lang_settings != language_list[self.language]:
             language_list[self.language] = new_lang_settings
-            with open(USER + '/.Vcode/languages.json', 'w') as llfw:
+            with open(CONFIG_PATH + '/languages.json', 'w') as llfw:
                 json.dump(language_list, llfw)
             QSettings('Vcode', 'CompilerHistory').setValue(self.language, json.dumps({
                 'start_command': list(set(self.start_command.itemText(i) for i in range(self.start_command.count()))),

@@ -1,6 +1,7 @@
 from os.path import expanduser
 
 USER: str = expanduser('~').replace('\\', '/')
+CONFIG_PATH: str = f'{USER}/.Vcode'
 
 ENCODINGS: list[str] = [
     'ascii', 'big5', 'big5hkscs', 'cp037', 'cp1006', 'cp1026', 'cp1125', 'cp1140', 'cp1250', 'cp1251', 'cp1252',
@@ -44,25 +45,25 @@ a|abbr|above|absolute|accept|accesskey|action|address|alt|always|aqua|area|armen
 "([^"]*)"|'([^']*)' = {"foreground": [0, 240, 0]};'''
 
 python_ll: dict[str, str] = {
-    "highlight": f"{USER}/.Vcode/highlights/python.hl",
+    "highlight": f"{CONFIG_PATH}/highlights/python.hl",
     "file_formats": ["py", "pyw", "pyi"],
     "start_command": "python \"{filename}\"",
     "debug_command": "python -m pdb \"{filename}\""
 }
 html_ll: dict[str, str] = {
-    "highlight": f"{USER}/.Vcode/highlights/html.hl",
+    "highlight": f"{CONFIG_PATH}/highlights/html.hl",
     "file_formats": ["htm", "html"],
     "start_command": "start \"\" \"{filename}\"",
     "debug_command": ""
 }
 json_ll: dict[str, str] = {
-    "highlight": f"{USER}/.Vcode/highlights/json.hl",
+    "highlight": f"{CONFIG_PATH}/highlights/json.hl",
     "file_formats": ["json"],
     "start_command": "",
     "debug_command": ""
 }
 php_ll: dict[str, str] = {
-    "highlight": f"{USER}/.Vcode/highlights/php.hl",
+    "highlight": f"{CONFIG_PATH}/highlights/php.hl",
     "file_formats": ["php"],
     "start_command": "php \"{filename}\"",
     "debug_command": ""

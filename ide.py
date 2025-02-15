@@ -35,51 +35,51 @@ for file in listdir(resource_path('styles')):
         with open(resource_path('styles/' + file)) as qss:
             style[file[:-4]] = qss.read()
 
-if exists(USER + '/.Vcode/languages.json'):
-    with open(USER + '/.Vcode/languages.json') as llf:
+if exists(CONFIG_PATH + '/languages.json'):
+    with open(CONFIG_PATH + '/languages.json') as llf:
         language_list: dict[str, dict[str, str]] = json.load(llf)
     if 'Python' not in language_list.keys():
         language_list["Python"] = python_ll
-        with open(USER + '/.Vcode/languages.json', 'w') as llf:
+        with open(CONFIG_PATH + '/languages.json', 'w') as llf:
             json.dump(language_list, llf)
     if 'Html' not in language_list.keys():
         language_list["Html"] = html_ll
-        with open(USER + '/.Vcode/languages.json', 'w') as llf:
+        with open(CONFIG_PATH + '/languages.json', 'w') as llf:
             json.dump(language_list, llf)
     if 'JSON' not in language_list.keys():
         language_list["JSON"] = json_ll
-        with open(USER + '/.Vcode/languages.json', 'w') as llf:
+        with open(CONFIG_PATH + '/languages.json', 'w') as llf:
             json.dump(language_list, llf)
     if 'PHP' not in language_list.keys():
         language_list["PHP"] = php_ll
-        with open(USER + '/.Vcode/languages.json', 'w') as llf:
+        with open(CONFIG_PATH + '/languages.json', 'w') as llf:
             json.dump(language_list, llf)
 else:
     language_list: dict[str, dict[str, str]] = {"Python": python_ll, "Html": html_ll, "JSON": json_ll, "PHP": php_ll}
-    if not exists(USER + '/.Vcode/'):
-        mkdir(USER + '/.Vcode/')
-    with open(USER + '/.Vcode/languages.json', 'w') as llf:
+    if not exists(CONFIG_PATH):
+        mkdir(CONFIG_PATH)
+    with open(CONFIG_PATH + '/languages.json', 'w') as llf:
         json.dump(language_list, llf)
-if not exists(USER + '/.Vcode/extensions/'):
-    mkdir(USER + '/.Vcode/extensions/')
-if not exists(USER + '/.Vcode/highlights/'):
-    mkdir(USER + '/.Vcode/highlights/')
-if not exists(USER + '/.Vcode/highlights/python.hl'):
-    with open(USER + '/.Vcode/highlights/python.hl', 'w') as llf:
+if not exists(CONFIG_PATH + '/extensions/'):
+    mkdir(CONFIG_PATH + '/extensions/')
+if not exists(CONFIG_PATH + '/highlights/'):
+    mkdir(CONFIG_PATH + '/highlights/')
+if not exists(CONFIG_PATH + '/highlights/python.hl'):
+    with open(CONFIG_PATH + '/highlights/python.hl', 'w') as llf:
         llf.write(python_hl)
-if not exists(USER + '/.Vcode/highlights/html.hl'):
-    with open(USER + '/.Vcode/highlights/html.hl', 'w') as llf:
+if not exists(CONFIG_PATH + '/highlights/html.hl'):
+    with open(CONFIG_PATH + '/highlights/html.hl', 'w') as llf:
         llf.write(html_hl)
-if not exists(USER + '/.Vcode/highlights/json.hl'):
-    with open(USER + '/.Vcode/highlights/json.hl', 'w') as llf:
+if not exists(CONFIG_PATH + '/highlights/json.hl'):
+    with open(CONFIG_PATH + '/highlights/json.hl', 'w') as llf:
         llf.write(json_hl)
-if not exists(USER + '/.Vcode/highlights/php.hl'):
-    with open(USER + '/.Vcode/highlights/php.hl', 'w') as llf:
+if not exists(CONFIG_PATH + '/highlights/php.hl'):
+    with open(CONFIG_PATH + '/highlights/php.hl', 'w') as llf:
         llf.write(php_hl)
 
 
 if __name__ == '__main__':
-    from classes.idewindow import IdeWindow, HighlightMaker
+    from classes.idewindow import IdeWindow, HighlightMaker, ProjectSettingsDialog
 
     app: QApplication = QApplication(sys.argv)
     app.setWindowIcon(QIcon(resource_path('Vcode.ico')))
@@ -88,8 +88,10 @@ if __name__ == '__main__':
 
     if ide.settings.value('Recent') == 1:
         last: QSettings = QSettings('Vcode', 'Last')
+        if last.value('project'):
+            ide.open_project(last.value('project'))
         for n in last.allKeys():
-            if n != 'current' and last.value(n) is not None:
+            if n not in ('current', 'project') and last.value(n) is not None:
                 ide.add_tab(n, int(last.value(n)))
             elif last.value('current') is not None:
                 ide.editor_tabs.setCurrentIndex(int(last.value('current')))
@@ -97,12 +99,16 @@ if __name__ == '__main__':
 
     for arg in sys.argv[1:]:
         if isfile(arg):
-            if not arg.endswith('.hl'):
-                ide.add_tab(arg.replace('\\', '/'))
-            else:
+            if arg.endswith('.vcodeproject'):
+                ide.open_project(arg.replace('.vcodeproject', ''))
+                prs: ProjectSettingsDialog = ProjectSettingsDialog(ide.project, ide)
+                prs.exec()
+            elif arg.endswith('.hl'):
                 hm: HighlightMaker = HighlightMaker(arg)
                 hm.setWindowTitle(f'{arg} - Vcode highlight maker')
                 hm.exec()
+            else:
+                ide.add_tab(arg.replace('\\', '/'))
 
     ide.settings_window.autorun.setEnabled(False)
     ide.settings_window.autorun.setStyleSheet('font: italic;')

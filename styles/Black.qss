@@ -23,7 +23,7 @@ QMenuBar::item:selected, QMenu:selected {
 }
 
 QTabBar {
-    color: black;
+    color: white;
 }
 
 QLabel, QRadioButton, QCheckBox {

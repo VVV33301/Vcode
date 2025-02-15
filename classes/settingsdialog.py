@@ -115,7 +115,7 @@ class SettingsDialog(QDialog):
         """Remove a language"""
         name: QListWidgetItem = self.languages_list.selectedItems()[0]
         del language_list[name.text()]
-        with open(USER + '/.Vcode/languages.json', 'w') as llfw:
+        with open(CONFIG_PATH + '/languages.json', 'w') as llfw:
             json.dump(language_list, llfw)
         self.languages_list.takeItem(self.languages_list.row(name))
 
@@ -125,7 +125,7 @@ class SettingsDialog(QDialog):
         name.exec()
         if name.text_value():
             language_list[name.text_value()] = {"highlight": "", "file_formats": [], "start_command": ""}
-            with open(USER + '/.Vcode/languages.json', 'w') as llfw:
+            with open(CONFIG_PATH + '/languages.json', 'w') as llfw:
                 json.dump(language_list, llfw)
         self.languages_list.addItem(QListWidgetItem(name.text_value(), self.languages_list))
 
@@ -133,15 +133,15 @@ class SettingsDialog(QDialog):
         """Reset all languages"""
         language_list: dict[str, dict[str, str]] = {"Python": python_ll, "Html": html_ll, "JSON": json_ll,
                                                     "PHP": php_ll}
-        with open(USER + '/.Vcode/languages.json', 'w') as llf:
+        with open(CONFIG_PATH + '/languages.json', 'w') as llf:
             json.dump(language_list, llf)
-        with open(USER + '/.Vcode/highlights/python.hl', 'w') as llf:
+        with open(CONFIG_PATH + '/highlights/python.hl', 'w') as llf:
             llf.write(python_hl)
-        with open(USER + '/.Vcode/highlights/html.hl', 'w') as llf:
+        with open(CONFIG_PATH + '/highlights/html.hl', 'w') as llf:
             llf.write(html_hl)
-        with open(USER + '/.Vcode/highlights/json.hl', 'w') as llf:
+        with open(CONFIG_PATH + '/highlights/json.hl', 'w') as llf:
             llf.write(json_hl)
-        with open(USER + '/.Vcode/highlights/php.hl', 'w') as llf:
+        with open(CONFIG_PATH + '/highlights/php.hl', 'w') as llf:
             llf.write(php_hl)
         rst: str = WarningMessageBox(self, 'Reset', texts.restart_warning, WarningMessageBox.RESTART).wait()
         if rst == texts.restart_btn[self.lang]:
