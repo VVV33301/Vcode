@@ -1,6 +1,6 @@
 from PyQt6.QtWidgets import QMainWindow, QPushButton, QLineEdit, QToolBar, QWidgetAction
 from PyQt6.QtGui import QKeySequence
-from PyQt6.QtCore import QUrl, pyqtSlot, QCoreApplication, Qt
+from PyQt6.QtCore import QUrl, pyqtSlot, QCoreApplication, Qt, QT_VERSION_STR
 
 QCoreApplication.setAttribute(Qt.ApplicationAttribute.AA_ShareOpenGLContexts)
 try:
@@ -8,7 +8,7 @@ try:
     from PyQt6.QtWebEngineCore import QWebEnginePage
 except ImportError:
     import pip
-    pip.main(['install', 'PyQt6-WebEngine'])
+    pip.main(['install', 'PyQt6-WebEngine<=' + QT_VERSION_STR])
     from PyQt6.QtWebEngineWidgets import QWebEngineView
     from PyQt6.QtWebEngineCore import QWebEnginePage
 
