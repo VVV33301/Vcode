@@ -6,6 +6,8 @@ from default import CONFIG_PATH
 
 
 class ExtensionsSettings(QDialog):
+    """Extension settings dialog"""
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self.parent: QWidget = parent

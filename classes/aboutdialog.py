@@ -27,8 +27,11 @@ class AboutDialog(QDialog):
         layout.addWidget(self.name, alignment=Qt.AlignmentFlag.AlignHCenter)
 
         self.text: QLabel = QLabel(f'Version: {VERSION}<br><br><a href="https://vcodeide.ru">vcodeide.ru</a>'
+                                   f'<br><a href="https://github.com/VVV33301/Vcode">GitHub</a> '
+                                   f'<a href="https://t.me/vcodeide">Telegram</a> '
+                                   f'<a href="https://boosty.to/vcode">Boosty</a>'
                                    f'<br><br>Vladimir Varenik<br>'
-                                   f'Copyright 2023-2024. All rights reserved<br>'
+                                   f'Copyright 2023-2025. All rights reserved<br>'
                                    f'This program is under GNU General Public License', self)
         self.text.setOpenExternalLinks(True)
         layout.addWidget(self.text)

@@ -1,3 +1,6 @@
+# Copied from Experience Browser
+# Copyright 2022-2025 Dilyara Ismagilova. All rights reserved
+
 from PyQt6.QtWidgets import QMainWindow, QPushButton, QLineEdit, QToolBar, QWidgetAction
 from PyQt6.QtGui import QKeySequence
 from PyQt6.QtCore import QUrl, pyqtSlot, QCoreApplication, Qt, QT_VERSION_STR
@@ -30,10 +33,10 @@ class Browser(QMainWindow):
     def __init__(self, parent):
         super().__init__(parent=parent)
         self.parent = parent
-        self.setStyleSheet('QPushButton {width: 20px}')
         self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
 
         self.web = QWebEngineView(self)
+        self.web.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
         self.page = WebEnginePage(self)
         self.web.setPage(self.page)
         self.page.urlChanged.connect(self.update_urlbar)
@@ -45,6 +48,7 @@ class Browser(QMainWindow):
 
         back_btn = QWidgetAction(navtb)  # Кнопка передвижения на предыдущую страницу
         back_t = QPushButton(chr(10094))
+        back_t.setFixedWidth(20)
         back_t.clicked.connect(lambda: self.web.back())
         back_btn.setDefaultWidget(back_t)
         back_btn.setShortcut(QKeySequence.StandardKey.Back)  # Горячая клавиша
@@ -53,6 +57,7 @@ class Browser(QMainWindow):
 
         next_btn = QWidgetAction(navtb)  # Кнопка передвижения на следующую страницу
         next_t = QPushButton(chr(10095))
+        next_t.setFixedWidth(20)
         next_t.clicked.connect(lambda: self.web.forward())
         next_btn.setDefaultWidget(next_t)
         next_btn.setShortcut(QKeySequence.StandardKey.Forward)
@@ -61,6 +66,7 @@ class Browser(QMainWindow):
 
         reload_btn = QWidgetAction(navtb)  # Кнопка обновления страницы
         reload_t = QPushButton(chr(11118))
+        reload_t.setFixedWidth(20)
         reload_t.clicked.connect(lambda: self.web.reload())
         reload_btn.setDefaultWidget(reload_t)
         reload_btn.setShortcut(QKeySequence.StandardKey.Refresh)
@@ -69,6 +75,7 @@ class Browser(QMainWindow):
 
         stop_btn = QWidgetAction(navtb)  # Кнопка отмены обновления страницы
         stop_t = QPushButton(chr(10805))
+        stop_t.setFixedWidth(20)
         stop_t.clicked.connect(lambda: self.web.stop())
         stop_btn.setDefaultWidget(stop_t)
         stop_btn.setShortcut(QKeySequence.StandardKey.Cancel)
@@ -77,6 +84,7 @@ class Browser(QMainWindow):
 
         home_btn = QWidgetAction(navtb)  # Кнопка возвращения на домашнюю страницу
         home_t = QPushButton(chr(8962))
+        home_t.setFixedWidth(20)
         home_t.clicked.connect(self.go_home)
         home_btn.setDefaultWidget(home_t)
         home_btn.setShortcut('Home')
@@ -92,6 +100,7 @@ class Browser(QMainWindow):
 
         out_btn = QWidgetAction(navtb)  # Кнопка возвращения на домашнюю страницу
         out_t = QPushButton('X')
+        out_t.setFixedWidth(20)
         out_t.clicked.connect(self.go_out)
         out_btn.setDefaultWidget(out_t)
         out_btn.setShortcut('Insert')

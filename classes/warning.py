@@ -10,11 +10,12 @@ class WarningMessageBox(QMessageBox):
     UPDATE: int = 2
     RESTART: int = 3
 
-    def __init__(self, parent: QWidget, title: str, text_all_lang: dict[str, str],
+    def __init__(self, parent: QWidget, title: str | dict[str, str], text_all_lang: dict[str, str],
                  msg_type: int = INFO) -> None:
         super().__init__(parent=parent)
+        self.setStyleSheet('QPushButton {min-width: 150px}')
         lang: str = QSettings('Vcode', 'Settings').value('Language')
-        self.setWindowTitle(title)
+        self.setWindowTitle(title[lang] if type(title) is dict else title)
         self.setText(text_all_lang[lang])
 
         if msg_type == self.SAVE:

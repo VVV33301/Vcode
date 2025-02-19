@@ -5,7 +5,6 @@ from default import USER, CONFIG_PATH
 import texts
 from .lineedit import LineEditMenu
 from .highlightmaker import HighlightMaker
-from .warning import WarningMessageBox
 from ide import language_list
 
 
@@ -116,7 +115,5 @@ class LanguageSettingsDialog(QDialog):
             QSettings('Vcode', 'CompilerHistory').setValue(self.language, json.dumps({
                 'start_command': list(set(self.start_command.itemText(i) for i in range(self.start_command.count()))),
                 'debug_command': list(set(self.debug_command.itemText(i) for i in range(self.debug_command.count())))}))
-            rst: str = WarningMessageBox(self, 'Reset', texts.restart_warning, WarningMessageBox.RESTART).wait()
-            if rst == texts.restart_btn[self.lang_s]:
-                self.app.restart()
+            self.app.restart()
         self.accept()

@@ -5,7 +5,6 @@ from default import CONFIG_PATH
 import texts
 from .lineedit import LineEditMenu
 from .highlightmaker import HighlightMaker
-from .warning import WarningMessageBox
 
 
 class ProjectSettingsDialog(QDialog):
@@ -112,7 +111,5 @@ class ProjectSettingsDialog(QDialog):
         }
         with open(self.project['path'] + '/.vcodeproject', 'w') as h:
             json.dump(new_lang_settings, h)
-        rst: str = WarningMessageBox(self, 'Reset', texts.restart_warning, WarningMessageBox.RESTART).wait()
-        if rst == texts.restart_btn[self.lang_s]:
-            self.parent.restart()
+        self.parent.restart()
         self.accept()

@@ -143,6 +143,4 @@ class SettingsDialog(QDialog):
             llf.write(json_hl)
         with open(CONFIG_PATH + '/highlights/php.hl', 'w') as llf:
             llf.write(php_hl)
-        rst: str = WarningMessageBox(self, 'Reset', texts.restart_warning, WarningMessageBox.RESTART).wait()
-        if rst == texts.restart_btn[self.lang]:
-            self.parent.restart()
+        self.parent.restart()

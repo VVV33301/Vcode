@@ -3,7 +3,7 @@ from os import listdir, mkdir
 from os.path import exists, abspath, dirname
 from default import CONFIG_PATH
 
-mains = {}
+mains: dict[str, getattr] = {}
 for py in [f[:-3] for f in listdir(dirname(abspath(__file__))) if f.endswith('.py') and f != '__init__.py']:
     mod = __import__(__name__ + '.' + py, fromlist=[py])
     mains[py] = getattr(mod, 'main')

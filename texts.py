@@ -94,6 +94,7 @@ search_in_g = {'en': 'Search in Google', 'ru': 'Искать в Google', 'de': '
 search_in_so = {'en': 'Search in Stack Overflow', 'ru': 'Искать на Stack Overflow', 'de': 'Suchen in Stack Overflow',
                 'ch': '在 Stack Overflow 中搜索', 'hi': 'Stack Overflow में खोजें'}
 
+warning_text = {'en': 'Warning', 'ru': 'Предупреждение', 'de': 'Warnung', 'ch': '警告', 'hi': 'चेतावनी'}
 unsupported_encoding = {'en': 'Unsupported encoding', 'ru': 'Неподдерживаемая кодировка',
                         'de': 'Nicht unterstützte Kodierung', 'ch': '不支持的编码', 'hi': 'असमर्थित एन्कोडिंग'}
 save_warning = {'en': 'Do you want to save changes?', 'ru': 'Вы хотите сохранить изменения?',

@@ -1,16 +1,15 @@
-import json
-
 from PyQt6.QtWidgets import (QApplication, QWidget, QMainWindow, QTreeView, QRadioButton, QToolBar, QLabel, QSizePolicy,
-                             QMenu, QSplitter, QFileDialog, QTabWidget, QListWidget, QListWidgetItem)
+                             QMenu, QSplitter, QFileDialog, QTabWidget, QListWidgetItem)
 from PyQt6.QtGui import (QFileSystemModel, QAction, QKeySequence, QFont, QFontDatabase, QTextCursor, QDragEnterEvent,
                          QDropEvent, QCloseEvent)
 from PyQt6.QtCore import Qt, QSettings, QDir, QItemSelectionModel, QMimeData
+from requests import get
 import threading
 import subprocess
 from webbrowser import open as openweb
-from requests import get
-from os import remove, system
+from os import remove, system, execv
 from os.path import isdir, isfile, exists
+import json
 import texts
 from functions import *
 from .aboutdialog import AboutDialog
@@ -542,7 +541,8 @@ class IdeWindow(QMainWindow):
         widget: EditorTab = self.editor_tabs.widget(tab)
         if type(widget) is EditorTab:
             if widget.saved_text != widget.toPlainText():
-                button_text: str = WarningMessageBox(self, 'Warning', texts.save_warning, WarningMessageBox.SAVE).wait()
+                button_text: str = WarningMessageBox(self, texts.warning_text,
+                                                     texts.save_warning, WarningMessageBox.SAVE).wait()
                 if button_text in texts.cancel_btn.values():
                     return
                 elif button_text in texts.save_btn.values():
@@ -764,7 +764,8 @@ class IdeWindow(QMainWindow):
             if file_ed is None or type(file_ed) is not EditorTab:
                 return
         if not self.settings.value('Autosave') and file_ed.saved_text != file_ed.toPlainText():
-            button_text: str = WarningMessageBox(self, 'Warning', texts.save_warning, WarningMessageBox.SAVE).wait()
+            button_text: str = WarningMessageBox(self, texts.warning_text, texts.save_warning,
+                                                 WarningMessageBox.SAVE).wait()
             if button_text in texts.cancel_btn.values():
                 return
             elif button_text in texts.save_btn.values():
@@ -778,7 +779,8 @@ class IdeWindow(QMainWindow):
             if file_ed is None or type(file_ed) is not EditorTab:
                 return
         if not self.settings.value('Autosave') and file_ed.saved_text != file_ed.toPlainText():
-            button_text: str = WarningMessageBox(self, 'Warning', texts.save_warning, WarningMessageBox.SAVE).wait()
+            button_text: str = WarningMessageBox(self, texts.warning_text, texts.save_warning,
+                                                 WarningMessageBox.SAVE).wait()
             if button_text in texts.cancel_btn.values():
                 return
             elif button_text in texts.save_btn.values():
@@ -934,6 +936,7 @@ class IdeWindow(QMainWindow):
             self.git_repo.remotes.origin.push()
 
     def extension_enable(self, item: QListWidgetItem) -> None:
+        """Set enabled extension"""
         if item.checkState() == Qt.CheckState.Unchecked and self.ext_list.value(item.text()) == 1:
             self.ext_list.setValue(item.text(), 0)
             self.restart()
@@ -943,17 +946,10 @@ class IdeWindow(QMainWindow):
 
     def restart(self) -> None:
         """Restart the program"""
-        self.close()
-        self.__init__()
-        last: QSettings = QSettings('Vcode', 'Last')
-        if last.value('project'):
-            self.open_project(last.value('project'))
-        for n in last.allKeys():
-            if n not in ('current', 'project') and last.value(n) is not None:
-                self.add_tab(n, int(last.value(n)))
-            elif last.value('current') is not None:
-                self.editor_tabs.setCurrentIndex(int(last.value('current')))
-        last.clear()
+        if (WarningMessageBox(self, texts.restart_btn, texts.restart_warning, WarningMessageBox.RESTART).wait() ==
+                texts.restart_btn[self.settings.value('Language')]):
+            self.close()
+            execv(sys.executable, [sys.executable] + sys.argv)
 
     def dragEnterEvent(self, event: QDragEnterEvent) -> None:
         mime: QMimeData = event.mimeData()
@@ -972,7 +968,8 @@ class IdeWindow(QMainWindow):
         """Save all settings when close"""
         for wgt in QApplication.instance().allWidgets():
             if type(wgt) is EditorTab and wgt.saved_text != wgt.toPlainText():
-                button_text: str = WarningMessageBox(self, 'Warning', texts.save_warning, WarningMessageBox.SAVE).wait()
+                button_text: str = WarningMessageBox(self, texts.warning_text, texts.save_warning,
+                                                     WarningMessageBox.SAVE).wait()
                 if button_text in texts.cancel_btn.values():
                     a0.ignore()
                     return
