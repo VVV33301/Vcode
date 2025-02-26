@@ -10,10 +10,11 @@ try:
     from PyQt6.QtWebEngineWidgets import QWebEngineView
     from PyQt6.QtWebEngineCore import QWebEnginePage
 except ImportError:
-    import pip
-    pip.main(['install', 'PyQt6-WebEngine<=' + QT_VERSION_STR])
-    from PyQt6.QtWebEngineWidgets import QWebEngineView
-    from PyQt6.QtWebEngineCore import QWebEnginePage
+    # import pip
+    # pip.main(['install', 'PyQt6-WebEngine<=' + QT_VERSION_STR])
+    # from PyQt6.QtWebEngineWidgets import QWebEngineView
+    # from PyQt6.QtWebEngineCore import QWebEnginePage
+    raise ImportError('PyQtWebEngine is not installed')
 
 
 class WebEnginePage(QWebEnginePage):

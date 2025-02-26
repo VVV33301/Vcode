@@ -20,9 +20,9 @@ import json
 from os import mkdir, listdir
 from os.path import isfile, exists
 
-from PyQt6.QtWidgets import *
-from PyQt6.QtCore import *
-from PyQt6.QtGui import *
+from PyQt6.QtWidgets import QApplication
+from PyQt6.QtGui import QIcon
+from PyQt6.QtCore import QSettings
 
 from functions import resource_path
 from default import *

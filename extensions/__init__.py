@@ -5,8 +5,11 @@ from default import CONFIG_PATH
 
 mains: dict[str, getattr] = {}
 for py in [f[:-3] for f in listdir(dirname(abspath(__file__))) if f.endswith('.py') and f != '__init__.py']:
-    mod = __import__(__name__ + '.' + py, fromlist=[py])
-    mains[py] = getattr(mod, 'main')
+    try:
+        mod = __import__(__name__ + '.' + py, fromlist=[py])
+        mains[py] = getattr(mod, 'main')
+    except ImportError:
+        pass
 if not exists(CONFIG_PATH + '/extensions'):
     mkdir(CONFIG_PATH + '/extensions/')
 sys.path.append(CONFIG_PATH + '/extensions/')
