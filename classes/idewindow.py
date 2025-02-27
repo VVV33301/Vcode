@@ -950,6 +950,7 @@ class IdeWindow(QMainWindow):
                 texts.restart_btn[self.settings.value('Language')]):
             self.close()
             execv(sys.executable, [sys.executable] + sys.argv)
+            exit()
 
     def dragEnterEvent(self, event: QDragEnterEvent) -> None:
         mime: QMimeData = event.mimeData()

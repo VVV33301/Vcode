@@ -23,8 +23,12 @@ class AaronAIWindow(QWidget):
             self.fail_text = fail_text
 
         def run(self):
-            req = requests.post(self.URL, headers=self.HEADERS, json={'model': 'qwen2.5-coder:3b', 'messages':
-                [{'role': 'user', 'content': self.text}]})
+            try:
+                req = requests.post(self.URL, headers=self.HEADERS, json={'model': 'qwen2.5-coder:3b', 'messages':
+                    [{'role': 'user', 'content': self.text}]})
+            except requests.exceptions.ConnectTimeout:
+                self.out_recieved.emit(self.fail_text)
+                return
             if req.status_code == 200:
                 self.out_recieved.emit(req.json()['choices'][0]['message']['content'])
             else:
