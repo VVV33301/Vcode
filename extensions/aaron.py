@@ -13,9 +13,6 @@ class AaronAIWindow(QWidget):
 
     class Request(QObject):
         out_recieved = pyqtSignal(str)
-        URL = 'http://bilet.tatar:8080/api/chat/completions'
-        HEADERS = {'Authorization': 'Bearer sk-ccbfecb8062748dc8e42a29c07dd745a',
-                   'Content-Type': 'application/json'}
 
         def __init__(self, text, fail_text):
             super().__init__()
@@ -24,20 +21,21 @@ class AaronAIWindow(QWidget):
 
         def run(self):
             try:
-                req = requests.post(self.URL, headers=self.HEADERS, json={'model': 'qwen2.5-coder:3b', 'messages':
-                    [{'role': 'user', 'content': self.text}]})
+                data = requests.post('https://version.vcodeide.ru/aaron_data.json', verify=False)
             except requests.exceptions.ConnectTimeout:
                 self.out_recieved.emit(self.fail_text)
                 return
-            if req.status_code == 200:
-                self.out_recieved.emit(req.json()['choices'][0]['message']['content'])
-            else:
-                req = requests.post(self.URL, headers=self.HEADERS, json={'model': 'mistral:7b', 'messages':
-                    [{'role': 'user', 'content': self.text}]})
+            url_data = data.json()
+            for model in url_data['models']:
+                try:
+                    req = requests.post(url_data['url'], headers=url_data['headers'], json={'model': model, 'messages':
+                        [{'role': 'user', 'content': self.text}]})
+                except requests.exceptions.ConnectTimeout:
+                    self.out_recieved.emit(self.fail_text)
+                    return
                 if req.status_code == 200:
                     self.out_recieved.emit(req.json()['choices'][0]['message']['content'])
-                else:
-                    self.out_recieved.emit(self.fail_text)
+                    return
 
     def __init__(self, parent=None, *args, **kwargs):
         super().__init__(parent, *args, **kwargs)
