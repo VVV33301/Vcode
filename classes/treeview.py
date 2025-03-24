@@ -1,4 +1,4 @@
-from PyQt6.QtWidgets import QMenu, QTreeView, QApplication
+from PyQt6.QtWidgets import QMenu, QTreeView, QApplication, QTabWidget
 from PyQt6.QtGui import QAction, QKeySequence, QContextMenuEvent
 from PyQt6.QtCore import QSettings, QMimeData, QUrl
 import shutil
@@ -7,6 +7,7 @@ from os.path import isfile, isdir
 import sys
 import texts
 from .inputdialog import InputDialog
+from .warning import WarningMessageBox
 
 
 class TreeViewMenu(QMenu):
@@ -63,12 +64,17 @@ class TreeViewMenu(QMenu):
                                         texts.new_btn[self.lang_s.value('Language')], self)
         file.exec()
         if file.text_value():
-            if file.text_value().endswith(('/', '\\')):
-                mkdir(self.c.model.filePath(self.c.tree.selectedIndexes()[0]) + '/' + file.text_value())
-            else:
-                x: str = self.c.model.filePath(self.c.tree.selectedIndexes()[0]) + '/' + file.text_value()
-                open(x, 'w', encoding=self.lang_s.value('Encoding')).close()
-                self.c.add_tab(x)
+            pth: str = self.c.model.filePath(self.c.tree.selectedIndexes()[0] if self.c.tree.selectedIndexes() \
+                else self.c.tree.rootIndex())
+            try:
+                if file.text_value().endswith(('/', '\\')):
+                    mkdir((pth if isdir(pth) else pth.rsplit('/', maxsplit=1)[0]) + '/' + file.text_value())
+                else:
+                    x: str = (pth if isdir(pth) else pth.rsplit('/', maxsplit=1)[0]) + '/' + file.text_value()
+                    open(x, 'w', encoding=self.lang_s.value('Encoding')).close()
+                    self.c.add_tab(x)
+            except OSError:
+                WarningMessageBox(self.c, texts.warning_text, texts.permission_denied).wait()
 
     def copy_file(self) -> None:
         """Copy file to clipboard"""
@@ -81,23 +87,30 @@ class TreeViewMenu(QMenu):
 
     def paste_file(self) -> None:
         """Paste file from clipboard"""
-        new_path: str = self.c.model.filePath(self.c.tree.selectedIndexes()[0])
+        new_path: str = self.c.model.filePath(self.c.tree.selectedIndexes()[0] if self.c.tree.selectedIndexes() \
+                                              else self.c.tree.rootIndex())
         if isdir(new_path):
-            for url in QApplication.instance().clipboard().mimeData().urls():
-                path: str = url.url().replace('file:///', '')
-                if isfile(path):
-                    shutil.copy2(
-                        path, new_path + '/' + QApplication.instance().clipboard().mimeData().urls()[0].fileName())
-                elif isdir(path):
-                    shutil.copytree(path, new_path + '/' + path.rsplit('/', maxsplit=1)[-1])
+            try:
+                for url in QApplication.instance().clipboard().mimeData().urls():
+                    path: str = url.url().replace('file:///', '')
+                    if isfile(path):
+                        shutil.copy2(
+                            path, new_path + '/' + QApplication.instance().clipboard().mimeData().urls()[0].fileName())
+                    elif isdir(path):
+                        shutil.copytree(path, new_path + '/' + path.rsplit('/', maxsplit=1)[-1])
+            except OSError:
+                WarningMessageBox(self.c, texts.warning_text, texts.permission_denied).wait()
 
     def delete_file(self) -> None:
         """Delete file"""
         n: str = self.c.model.filePath(self.c.tree.selectedIndexes()[0])
-        if isfile(n):
-            remove(n)
-        elif isdir(n):
-            shutil.rmtree(n)
+        try:
+            if isfile(n):
+                remove(n)
+            elif isdir(n):
+                shutil.rmtree(n)
+        except OSError:
+            WarningMessageBox(self.c, texts.warning_text, texts.permission_denied).wait()
 
     def rename_file(self) -> None:
         """Rename file to new name"""
@@ -109,6 +122,12 @@ class TreeViewMenu(QMenu):
         if file.text_value() != name:
             try:
                 rename(path + '/' + name, path + '/' + file.text_value())
+                for i in range(self.c.editor_tabs.count()):
+                    x = self.c.editor_tabs.widget(i)
+                    if x.file == path + '/' + name:
+                        x.file = path + '/' + file.text_value()
+                        x.filename = file.text_value()
+                        self.c.editor_tabs.setTabText(i, file.text_value())
             except Exception:
                 pass
 

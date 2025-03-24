@@ -16,7 +16,6 @@ from .aboutdialog import AboutDialog
 from .editortab import EditorTab
 from .extensionssettings import ExtensionsSettings
 from .findwindow import FindWindow
-from .git import git, GIT_INSTALLED
 from .highlighter import Highlighter
 from .highlightmaker import HighlightMaker
 from .inputdialog import InputDialog
@@ -32,6 +31,14 @@ from .warning import WarningMessageBox
 from default import USER, CONFIG_PATH, LANGUAGES
 from ide import VERSION, style, language_list
 import extensions
+
+
+try:
+    import git
+    GIT_INSTALLED: bool = True
+except ImportError:
+    git = None
+    GIT_INSTALLED: bool = False
 
 
 class IdeWindow(QMainWindow):
@@ -571,7 +578,7 @@ class IdeWindow(QMainWindow):
 
     def open_project(self, proj: str | None = None) -> None:
         """Open project in the editor"""
-        if proj is None:
+        if proj is None or proj is False:
             proj: str = QFileDialog.getExistingDirectory(directory=self.options.value('Folder')).replace('\\', '/')
         if proj and isdir(proj):
             self.options.setValue('Folder', proj)

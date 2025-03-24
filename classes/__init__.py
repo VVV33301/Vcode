@@ -3,7 +3,6 @@ from .createprojectdialog import CreateProjectDialog
 from .editortab import EditorTab
 from .extensionssettings import ExtensionsSettings
 from .findwindow import FindWindow
-from .git import git, GIT_INSTALLED
 from .highlighter import Highlighter
 from .highlightmaker import HighlightMaker
 from .highlightmakerstring import HighlightMakerString

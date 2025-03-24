@@ -97,6 +97,8 @@ search_in_so = {'en': 'Search in Stack Overflow', 'ru': 'Искать на Stack
 warning_text = {'en': 'Warning', 'ru': 'Предупреждение', 'de': 'Warnung', 'ch': '警告', 'hi': 'चेतावनी'}
 unsupported_encoding = {'en': 'Unsupported encoding', 'ru': 'Неподдерживаемая кодировка',
                         'de': 'Nicht unterstützte Kodierung', 'ch': '不支持的编码', 'hi': 'असमर्थित एन्कोडिंग'}
+permission_denied = {'en': 'Permission denied', 'ru': 'Доступ запрещён', 'de': 'Zugriff verweigert', 'ch': '权限被拒绝',
+                     'hi': 'अनुमति अस्वीकृत'}
 save_warning = {'en': 'Do you want to save changes?', 'ru': 'Вы хотите сохранить изменения?',
                 'de': 'Möchten Sie Änderungen speichern?', 'ch': '您想保存更改吗?',
                 'hi': 'क्या आप परिवर्तनों को सेव करना चाहते हैं?'}

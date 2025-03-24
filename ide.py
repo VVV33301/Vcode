@@ -27,7 +27,7 @@ from PyQt6.QtCore import QSettings
 from functions import resource_path
 from default import *
 
-VERSION: str = '1.0.0'
+VERSION: str = '1.0.1'
 
 style: dict[str, str] = {}
 for file in listdir(resource_path('styles')):

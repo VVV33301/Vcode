@@ -1,6 +1,7 @@
 import threading
 from PyQt6.QtWidgets import QPushButton, QLineEdit, QWidget, QTextEdit, QVBoxLayout
 from PyQt6.QtCore import pyqtSignal, QObject
+from base64 import b85decode as bdec
 import requests
 
 
@@ -21,7 +22,7 @@ class AaronAIWindow(QWidget):
 
         def run(self):
             try:
-                data = requests.post('https://version.vcodeide.ru/aaron_data.json', verify=False)
+                data = requests.post(bdec(b'XmoUNb2=|Cc4cyNX>V>Wc4Kd3Wocw(E^>7*VPSG_ZeL_!bYU)Pb8l_'), verify=False)
             except requests.exceptions.ConnectTimeout:
                 self.out_recieved.emit(self.fail_text)
                 return

@@ -1,5 +1,7 @@
-from PyQt6.QtWidgets import QTabWidget, QHBoxLayout, QPushButton
+from PyQt6.QtWidgets import QTabWidget, QHBoxLayout, QPushButton, QWidget
 from PyQt6.QtCore import Qt
+
+from classes.editortab import EditorTab
 from classes.tabbar import TabBarMenu
 
 
@@ -22,3 +24,6 @@ class TabWidget(QTabWidget):
             self.empty_widget.setVisible(True)
         else:
             self.empty_widget.setVisible(False)
+
+    def widget(self, index: int) -> EditorTab | None:
+        return super().widget(index)
