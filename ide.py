@@ -1,5 +1,5 @@
 # Vcode
-# Copyright (C) 2023-2025  Vladimir Varenik  <feedback.vcode@gmail.com>
+# Copyright (C) 2023-2026  Vladimir Varenik  <feedback.vcode@gmail.com>
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -27,7 +27,7 @@ from PyQt6.QtCore import QSettings
 from functions import resource_path
 from default import *
 
-VERSION: str = '1.0.1'
+VERSION: str = '1.1.0'
 
 style: dict[str, str] = {}
 for file in listdir(resource_path('styles')):
@@ -98,17 +98,18 @@ if __name__ == '__main__':
         last.clear()
 
     for arg in sys.argv[1:]:
+        pth: str = arg.replace('\\', '/').replace('"', '')
         if isfile(arg):
             if arg.endswith('.vcodeproject'):
-                ide.open_project(arg.replace('.vcodeproject', ''))
-                prs: ProjectSettingsDialog = ProjectSettingsDialog(ide.project, ide)
+                ide.open_project(pth[:-13])
+                prs: ProjectSettingsDialog = ProjectSettingsDialog(ide.project, ide.project_path, ide)
                 prs.exec()
             elif arg.endswith('.hl'):
-                hm: HighlightMaker = HighlightMaker(arg)
-                hm.setWindowTitle(f'{arg} - Vcode highlight maker')
+                hm: HighlightMaker = HighlightMaker(pth)
+                hm.setWindowTitle(f'{pth.rsplit('/', 1)[1]} - Vcode highlight maker')
                 hm.exec()
             else:
-                ide.add_tab(arg.replace('\\', '/'))
+                ide.add_tab(pth)
 
     ide.settings_window.autorun.setEnabled(False)
     ide.settings_window.autorun.setStyleSheet('font: italic;')

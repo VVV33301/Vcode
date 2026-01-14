@@ -138,5 +138,7 @@ class TreeViewMenu(QMenu):
             pth = pth.rsplit('\\', maxsplit=1)[0]
         if sys.platform == 'win32':
             system(f'explorer "{pth}"')
-        elif sys.platform.startswith('linux'):
+        elif sys.platform == 'linux':
             system(f'xdg-open "{pth}"')
+        elif sys.platform == 'darwin':
+            system(f'open "{pth}"')

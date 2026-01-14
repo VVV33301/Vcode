@@ -66,7 +66,7 @@ class EditorTab(QPlainTextEdit):
 
     def line_number_area_width(self) -> int:
         """Return sizes of text area"""
-        return max(45, 5 + self.fontMetrics().boundingRect('9').width() * (len(str(self.blockCount())) + 3))
+        return max(45, 5 + (self.fontMetrics().boundingRect('9').width() + 1) * (len(str(self.blockCount())) + 3))
 
     def update_line_number_area_width(self) -> None:
         """Set sizes of text area"""
@@ -268,7 +268,11 @@ class EditorTab(QPlainTextEdit):
         self.completer.complete(QRect(self.cursorRect().x(), self.cursorRect().y(), 200, 20))
 
     def dragEnterEvent(self, e: QDragEnterEvent) -> None:
-        pass
+        mime: QMimeData = e.mimeData()
+        if mime.hasUrls() or mime.hasText():
+            e.acceptProposedAction()
+        else:
+            e.ignore()
 
     def dropEvent(self, e: QDropEvent) -> None:
         mime: QMimeData = e.mimeData()

@@ -1,6 +1,8 @@
-QMainWindow {
+* {
     background-color: rgb(245, 245, 215);
+    color: rgb(45, 45, 45);
 }
+
 
 QDialog, QWidget {
     background-color: rgb(255, 255, 245);
@@ -11,79 +13,83 @@ QMenuBar, QMenu, QToolBar {
 }
 
 QMenuBar::item:selected, QMenu:selected {
-    background-color: rgb(215, 215, 195);
-    color: rgb(245, 245, 245);
+    background-color: rgb(225, 225, 195);
+    color: rgb(54, 54, 54);
+}
+
+QMenu {
+    min-width: 150px;
 }
 
 QTabBar {
-    background-color: rgb(30, 30, 60);
+    background-color: rgb(225, 225, 195);
     color: black;
 }
 
 QListView {
     border-radius: 6px;
     border-width: 2px;
-    border-color: rgb(60, 60, 90);
+    border-color: rgb(45, 45, 45);
     border-style: solid;
     height: 6em;
 }
 
 QTreeView::item:hover, QListView::item:hover {
-    background-color: rgb(184, 184, 190);
+    background-color: rgb(225, 225, 200);
 }
 
 QTreeView::item:selected, QListView::item:selected {
-    background-color: rgb(175, 175, 184);
+    background-color: rgb(205, 205, 180);
 }
 
 QGroupBox {
     padding-top: 18px;
     border-radius: 12px;
     border-width: 2px;
-    border-color: rgb(60, 60, 90);
+    border-color: rgb(45, 45, 45);
     border-style: solid;
     width: 6em;
 }
 
 QComboBox, QComboBox::drop-down {
     border-radius: 6px;
-    background-color: rgb(190, 190, 160);
+    background-color: rgb(225, 225, 200);
 }
 
 QComboBox QAbstractItemView {
-    background-color: rgb(220, 220, 190);
+    background-color: rgb(225, 225, 200);
 }
 
 QComboBox QAbstractItemView::item:hover, QComboBox QAbstractItemView::item:selected {
-    background-color: rgb(185, 185, 174);
+    background-color: rgb(205, 205, 180);
 }
 
 QPushButton {
     border-radius: 6px;
     border-width: 2px;
-    border-color: rgb(60, 60, 90);
+    border-color: rgb(45, 45, 45);
     border-style: solid;
-    background-color: rgb(220, 220, 190);
+    background-color: rgb(225, 225, 200);
     height: 1.8em;
     width: 5em;
 }
 
 QAbstractButton:hover {
-    background-color: rgb(185, 185, 174);
+    background-color: rgb(205, 205, 180);
 }
 
 QLineEdit, #asline {
     border-radius: 6px;
     border-width: 2px;
-    border-color: rgb(60, 60, 90);
+    border-color: rgb(45, 45, 45);
     border-style: solid;
-    background-color: rgb(220, 220, 190);
+    background-color: rgb(225, 225, 200);
     height: 1.8em;
     width: 10em;
 }
 
 QLineEdit:hover, #asline:hover {
-    background-color: rgb(185, 185, 174);
+    background-color: rgb(205, 205, 180);
 }
 
 #monitor {

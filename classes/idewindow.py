@@ -8,7 +8,7 @@ import threading
 import subprocess
 from webbrowser import open as openweb
 from os import remove, system, execv
-from os.path import isdir, isfile, exists
+from os.path import isdir, isfile
 import json
 import texts
 from functions import *
@@ -394,6 +394,7 @@ class IdeWindow(QMainWindow):
         self.settings_window.font_size.valueChanged.connect(self.select_font)
 
         self.project: dict[str, str] | None = None
+        self.project_path: str | None = None
         self.git_repo: git.Repo | None = None
 
         for ext in extensions.mains.keys():
@@ -405,6 +406,7 @@ class IdeWindow(QMainWindow):
             ei.setText(ext)
             ei.setFlags(ei.flags() | Qt.ItemFlag.ItemIsUserCheckable)
             ei.setCheckState(Qt.CheckState.Checked if self.ext_list.value(ext) else Qt.CheckState.Unchecked)
+        self.extensions.setVisible(bool(self.extensions.count()))
 
         self.select_language(self.settings.value('Language'))
         self.show_ide()
@@ -500,7 +502,7 @@ class IdeWindow(QMainWindow):
         if filename.endswith('.vcodeproject'):
             if self.project is None:
                 self.open_project(filename.replace('/.vcodeproject', ''))
-            vprs: ProjectSettingsDialog = ProjectSettingsDialog(self.project, self)
+            vprs: ProjectSettingsDialog = ProjectSettingsDialog(self.project, self.project_path, self)
             vprs.exec()
             return
         editor: EditorTab = EditorTab(filename, self)
@@ -518,24 +520,22 @@ class IdeWindow(QMainWindow):
         editor.setTextCursor(c)
         editor.setFocus()
         editor.cursorPositionChanged.connect(editor.highlight_current_line)
-        if self.project:
-            if self.project['highlight']:
-                editor.set_highlighter(Highlighter(resource_path(self.project['highlight'])))
-            editor.start_command = self.project['start_command']
-            editor.debug_command = self.project['debug_command']
-        else:
-            for langname, language in language_list.items():
-                if filename.rsplit('.', maxsplit=1)[-1] in language['file_formats']:
-                    editor.set_highlighter(Highlighter(resource_path(language['highlight'])))
+        for langname, language in language_list.items():
+            if filename.rsplit('.', maxsplit=1)[-1] in language['file_formats']:
+                editor.set_highlighter(Highlighter(resource_path(language['highlight'])))
+                if self.project:
+                    editor.start_command = self.project['start_command']
+                    editor.debug_command = self.project['debug_command']
+                else:
                     editor.start_command = language['start_command']
                     editor.debug_command = language['debug_command']
-                    editor.language = langname
+                editor.language = langname
         editor.setWindowTitle(editor.filename)
         for item in self.history.allKeys():
             if self.history.value(item) == filename:
                 self.history.remove(item)
         self.history.setValue(str(len(self.history.allKeys())), filename)
-        self.update_history()
+        load_history(new_item=filename)
         self.update_history_menu()
         if row is None:
             self.editor_tabs.setCurrentIndex(self.editor_tabs.addTab(editor, editor.filename))
@@ -568,8 +568,7 @@ class IdeWindow(QMainWindow):
             dirpath: str = QFileDialog.getExistingDirectory(directory=self.options.value('Folder')).replace('\\', '/')
             if not dirpath:
                 return
-        self.project = {"path": dirpath, "name": dirpath.split('/')[-1], "highlight": "", "start_command": "",
-                        "debug_command": "", "git": 'false'}
+        self.project = {"name": dirpath.split('/')[-1], "start_command": "", "debug_command": "", "git": 'false'}
         if GIT_INSTALLED and git.Repo(dirpath).git_dir:
             self.project['git'] = 'true'
         with open(dirpath + '/.vcodeproject', 'w') as vcodeproject:
@@ -581,13 +580,14 @@ class IdeWindow(QMainWindow):
         if proj is None or proj is False:
             proj: str = QFileDialog.getExistingDirectory(directory=self.options.value('Folder')).replace('\\', '/')
         if proj and isdir(proj):
+            self.project_path = proj
             self.options.setValue('Folder', proj)
             if not exists(proj + '/.vcodeproject'):
                 self.new_project(dirpath=proj)
                 return
             with open(proj + '/.vcodeproject') as vcodeproject:
                 self.project = json.load(vcodeproject)
-            if self.project['git'] == 'true':
+            if self.project.get('git') == 'true' and GIT_INSTALLED:
                 self.git_repo = git.Repo(proj)
             self.tree.setRootIndex(self.model.index(proj))
             self.close_all_tabs()
@@ -601,6 +601,7 @@ class IdeWindow(QMainWindow):
     def close_project(self) -> None:
         """Close project in the editor"""
         self.project = None
+        self.project_path = None
         self.git_repo = None
         self.tree.setRootIndex(self.model.index(''))
         self.close_all_tabs()
@@ -608,7 +609,7 @@ class IdeWindow(QMainWindow):
 
     def project_settings(self) -> None:
         if self.project:
-            prs: ProjectSettingsDialog = ProjectSettingsDialog(self.project, self)
+            prs: ProjectSettingsDialog = ProjectSettingsDialog(self.project, self.project_path, self)
             prs.exec()
 
     def new_window(self, tab: int) -> None:
@@ -651,19 +652,12 @@ class IdeWindow(QMainWindow):
             self.editor_tabs.setCurrentIndex(self.editor_tabs.addTab(t, t.filename))
         self.editor_tabs.setTabToolTip(self.editor_tabs.currentIndex(), t.path)
 
-    def update_history(self) -> None:
-        """Update history"""
-        lst: list = [self.history.value(i) for i in self.history.allKeys()][-10:]
-        self.history.clear()
-        for i in range(len(lst)):
-            self.history.setValue(str(i), lst[i])
-
     def update_history_menu(self) -> None:
         """Update history menu"""
         self.history_btn.clear()
-        for item in self.history.allKeys():
-            act: QAction = QAction(self.history.value(item).rsplit('/', maxsplit=1)[-1], self)
-            act.setToolTip(self.history.value(item))
+        for item in load_history(return_list=True):
+            act: QAction = QAction(item.rsplit('/', maxsplit=1)[-1], self)
+            act.setToolTip(item)
             act.triggered.connect(lambda: self.add_tab(self.sender().toolTip()))
             self.history_btn.addAction(act)
         self.history_btn.addSeparator()
@@ -671,7 +665,7 @@ class IdeWindow(QMainWindow):
 
     def delete_history(self) -> None:
         """Delete history"""
-        self.history.clear()
+        load_history(clear=True)
         self.update_history_menu()
 
     def select_language(self, language: str) -> None:
@@ -758,9 +752,14 @@ class IdeWindow(QMainWindow):
         else:
             folder = file_ed.path
         if sys.platform == 'win32':
-            system(f'cd {folder} && start "Vcode terminal" powershell')
-        elif sys.platform.startswith('linux'):
-            system('bash')
+            subprocess.run(['start', 'powershell', '-NoExit', '-Command', f'Set-Location -Path "{folder}"'],
+                           shell=True, start_new_session=True)
+        elif sys.platform == 'darwin':
+            subprocess.run(['osascript', '-e', f'tell app "Terminal" to do script "cd {folder}"'], shell=True,
+                           start_new_session=True)
+        elif sys.platform == 'linux':
+            subprocess.run(["xterm", "-e", f"bash -c 'cd \\\"{folder}\\\" && exec bash'"], shell=True,
+                           start_new_session=True)
         else:
             self.exit_code.setText('Can`t start terminal in this operating system')
 
@@ -972,7 +971,7 @@ class IdeWindow(QMainWindow):
         """Open files from drop event"""
         for url in event.mimeData().urls():
             self.add_tab(url.toString().replace('file:///', ''))
-        return super().dropEvent(event)
+        super().dropEvent(event)
 
     def closeEvent(self, a0: QCloseEvent) -> None:
         """Save all settings when close"""
@@ -996,8 +995,8 @@ class IdeWindow(QMainWindow):
                 tab.close()
             save_last.setValue(tab.file, self.editor_tabs.indexOf(tab))
         save_last.setValue('current', self.editor_tabs.currentIndex())
-        if self.project:
-            save_last.setValue('project', self.project['path'])
+        if self.project_path:
+            save_last.setValue('project', self.project_path)
         self.options.setValue('Splitter', self.splitter.sizes())
         if self.isMaximized():
             self.options.setValue('Geometry', 'Maximized')
