@@ -32,13 +32,13 @@ def update_filters(lang: dict[str, dict[str, str]]) -> list[str]:
 
 def load_history(*, new_item: str | None = None, return_list: bool = False, clear: bool = False) -> list[str] | None:
     """Return last 10 links from history"""
-    if not exists(CONFIG_PATH + '\\history.txt') or clear:
+    if not exists(CONFIG_PATH + '/history.txt') or clear:
         open(CONFIG_PATH + '/history.txt', 'w', encoding='utf-8').close()
     if new_item:
-        with open(CONFIG_PATH + '\\history.txt', 'a', encoding='utf-8') as hf:
+        with open(CONFIG_PATH + '/history.txt', 'a', encoding='utf-8') as hf:
             hf.write(new_item + '\n')
     if return_list:
-        with open(CONFIG_PATH + '\\history.txt', encoding='utf-8') as hf:
+        with open(CONFIG_PATH + '/history.txt', encoding='utf-8') as hf:
             ret: list[str] = []
             for line in hf.read().strip().splitlines()[::-1]:
                 if line not in ret:

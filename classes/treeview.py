@@ -133,9 +133,9 @@ class TreeViewMenu(QMenu):
 
     def open_in_explorer(self) -> None:
         """Open file or directory in explorer"""
-        pth: str = self.c.model.filePath(self.c.tree.selectedIndexes()[0]).replace('/', '\\')
+        pth: str = self.c.model.filePath(self.c.tree.selectedIndexes()[0]).replace('\\', '/')
         if isfile(pth):
-            pth = pth.rsplit('\\', maxsplit=1)[0]
+            pth = pth.rsplit('/', maxsplit=1)[0]
         if sys.platform == 'win32':
             system(f'explorer "{pth}"')
         elif sys.platform == 'linux':
